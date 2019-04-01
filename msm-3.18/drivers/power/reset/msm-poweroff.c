@@ -11,6 +11,8 @@
  *
  */
 
+#define pr_fmt(fmt) "%s %s: " fmt, KBUILD_MODNAME, __func__
+
 #include <linux/delay.h>
 #include <linux/err.h>
 #include <linux/init.h>
@@ -60,7 +62,7 @@ static void scm_disable_sdi(void);
 * There is no API from TZ to re-enable the registers.
 * So the SDI cannot be re-enabled when it already by-passed.
 */
-static int download_mode = 1;
+static int download_mode = 0;
 #else
 static const int download_mode;
 #endif
@@ -69,7 +71,7 @@ static const int download_mode;
 #define EDL_MODE_PROP "qcom,msm-imem-emergency_download_mode"
 #define DL_MODE_PROP "qcom,msm-imem-download_mode"
 
-static int in_panic;
+static int in_panic = 0;
 static void *dload_mode_addr;
 static bool dload_mode_enabled;
 static void *emergency_dload_mode_addr;
@@ -335,7 +337,11 @@ static void msm_restart_prepare(const char *cmd)
 		} else {
 			__raw_writel(0x77665501, restart_reason);
 		}
-	}
+	} else if (in_panic) {
+        qpnp_pon_set_restart_reason(
+            PON_RESTART_REASON_BOOTLOADER);
+        __raw_writel(0x77665500, restart_reason);
+    }
 
 	flush_cache_all();
 
@@ -402,6 +408,7 @@ static void do_msm_poweroff(void)
 	qpnp_pon_system_pwr_off(PON_POWER_OFF_SHUTDOWN);
 
 	halt_spmi_pmic_arbiter();
+    pr_notice("Bye bye...\n");
 	deassert_ps_hold();
 
 	mdelay(10000);
