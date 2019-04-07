@@ -10,6 +10,7 @@
  * GNU General Public License for more details.
  *
  */
+#define pr_fmt(fmt) "%s %s: " fmt, KBUILD_MODNAME, __func__
 
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -136,7 +137,7 @@ enum {
 	MSM_MPM_DEBUG_NON_DETECTABLE_IRQ_IDLE = BIT(3),
 };
 
-static int msm_mpm_debug_mask = 1;
+static int msm_mpm_debug_mask = MSM_MPM_DEBUG_NON_DETECTABLE_IRQ | MSM_MPM_DEBUG_PENDING_IRQ;
 module_param_named(
 	debug_mask, msm_mpm_debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP
 );
@@ -531,12 +532,10 @@ static bool msm_mpm_interrupts_detectable(int d, bool from_idle)
 	if (debug_mask && !ret) {
 		int i = 0;
 		i = find_first_bit(irq_bitmap, unlisted->size);
-		pr_info("%s(): %s preventing system sleep modes during %s\n",
-				__func__, unlisted->domain_name,
-				from_idle ? "idle" : "suspend");
+		pr_notice("%s preventing system sleep modes during %s\n", unlisted->domain_name, from_idle ? "idle" : "suspend");
 
 		while (i < unlisted->size) {
-			pr_info("\thwirq: %d\n", i);
+			pr_notice("\thwirq: %d\n", i);
 			i = find_next_bit(irq_bitmap, unlisted->size, i + 1);
 		}
 	}
@@ -598,9 +597,9 @@ void msm_mpm_exit_sleep(bool from_idle)
 		pending = msm_mpm_read(MSM_MPM_REG_STATUS, i);
 		pending &= enabled_intr[i];
 
-		if (MSM_MPM_DEBUG_PENDING_IRQ & msm_mpm_debug_mask)
-			pr_info("%s: enabled_intr.%d pending.%d: 0x%08x 0x%08lx\n",
-				__func__, i, i, enabled_intr[i], pending);
+		if (!from_idle && (MSM_MPM_DEBUG_PENDING_IRQ & msm_mpm_debug_mask)) {
+			pr_info("enabled_intr.%d 0x%08x pending.%d: 0x%08lx\n", i, enabled_intr[i], i, pending);
+        }
 
 		k = find_first_bit(&pending, 32);
 		while (k < 32) {
@@ -612,6 +611,9 @@ void msm_mpm_exit_sleep(bool from_idle)
 
 			if (desc)
 				chip = desc->irq_data.chip;
+            if (!from_idle && (MSM_MPM_DEBUG_PENDING_IRQ & msm_mpm_debug_mask)) {
+                pr_notice("wake irq[%d, %d] %s\n", apps_irq, mpm_irq, (desc)?(desc->action && desc->action->name)?desc->action->name:"no name irq":"no irq");
+            }
 
 			if (desc && !irqd_is_level_type(&desc->irq_data) &&
 				(!(chip && !strcmp(chip->name, "msmgpio")))) {
@@ -655,6 +657,7 @@ void msm_mpm_suspend_prepare(void)
 	bool allow;
 	unsigned long flags;
 
+    pr_notice("\n");
 	spin_lock_irqsave(&msm_mpm_lock, flags);
 
 	allow = msm_mpm_irqs_detectable(false) &&
@@ -671,6 +674,7 @@ void msm_mpm_suspend_wake(void)
 	bool allow;
 	unsigned long flags;
 
+    pr_notice("\n");
 	spin_lock_irqsave(&msm_mpm_lock, flags);
 
 	allow = msm_mpm_irqs_detectable(true) &&

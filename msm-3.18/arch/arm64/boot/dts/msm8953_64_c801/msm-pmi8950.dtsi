@@ -203,20 +203,21 @@
 			#size-cells = <1>;
 
 			qcom,iterm-ma = <100>;
-			qcom,float-voltage-mv = <4350>;
+			qcom,float-voltage-mv = <4200>;
 			qcom,resume-delta-mv = <200>;
 			qcom,chg-inhibit-fg;
 			qcom,rparasitic-uohm = <100000>;
 			qcom,bms-psy-name = "bms";
-			qcom,thermal-mitigation = <1500 700 600 0>;
-			//qcom,parallel-usb-min-current-ma = <1400>;
-			//qcom,parallel-usb-9v-min-current-ma = <900>;
-			//qcom,parallel-allowed-lowering-ma = <500>;
+			qcom,thermal-mitigation = <1500 700 600 0>; 
+			/*qcom,parallel-usb-min-current-ma = <1400>;
+			qcom,parallel-usb-9v-min-current-ma = <900>;
+			qcom,parallel-allowed-lowering-ma = <500>;*/
 			qcom,pmic-revid = <&pmi8950_revid>;
 			qcom,force-aicl-rerun;
 			qcom,aicl-rerun-period-s = <180>;
 			qcom,autoadjust-vfloat;
 			qcom,bmd-pin-src = "bpd_id";
+
 			qcom,chgr@1000 {
 				reg = <0x1000 0x100>;
 				interrupts =	<0x2 0x10 0x0>,
@@ -319,13 +320,15 @@
 			#size-cells = <1>;
 			qcom,resume-soc = <95>;
 			status = "okay";
-			qcom,fg-cc-cv-threshold-mv = <4340>;
 			qcom,bcl-lm-threshold-ma = <127>;
 			qcom,bcl-mh-threshold-ma = <405>;
-			qcom,fg-iterm-ma = <250>;
-			qcom,fg-chg-iterm-ma = <150>;
+			qcom,fg-iterm-ma = <150>;
+			qcom,fg-chg-iterm-ma = <100>;
+			/*qcom,fg-iterm-ma = <250>;
+			qcom,fg-chg-iterm-ma = <150>;*/
 			qcom,pmic-revid = <&pmi8950_revid>;
-			qcom,fg-cutoff-voltage-mv = <3300>;
+			qcom,fg-cutoff-voltage-mv = <3500>;
+			/*qcom,fg-cutoff-voltage-mv = <3300>;*/
 			qcom,cycle-counter-en;
 			qcom,capacity-learning-on;
 			qcom,vbat-estimate-diff-mv = <200>;

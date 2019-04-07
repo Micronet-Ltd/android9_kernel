@@ -16,6 +16,8 @@
  *
  */
 
+#define pr_fmt(fmt) "%s %s: " fmt, KBUILD_MODNAME, __func__
+
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/fs.h>
@@ -3921,6 +3923,7 @@ field ## _store(struct device *dev, struct device_attribute *attr,	\
 		return -EINVAL;						\
 	strlcpy(buffer, buf, sizeof(buffer));				\
 	strim(buffer);							\
+    pr_notice("%s\n", buffer);              \
 	return size;							\
 }									\
 static DEVICE_ATTR(field, S_IRUGO | S_IWUSR, field ## _show, field ## _store);
@@ -4038,6 +4041,7 @@ static int android_bind(struct usb_composite_dev *cdev)
 		sizeof(manufacturer_string) - 1);
 	strlcpy(product_string, "Android", sizeof(product_string) - 1);
 	strlcpy(serial_string, "0123456789ABCDEF", sizeof(serial_string) - 1);
+    pr_notice("%s\n", serial_string);
 
 	id = usb_string_id(cdev);
 	if (id < 0)

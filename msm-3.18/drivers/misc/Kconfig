@@ -626,5 +626,7 @@ source "drivers/misc/qcom/Kconfig"
 source "drivers/misc/mic/Kconfig"
 source "drivers/misc/genwqe/Kconfig"
 source "drivers/misc/echo/Kconfig"
+source "drivers/misc/j1708/Kconfig"
 source "drivers/misc/cxl/Kconfig"
+source "drivers/misc/dev_info/Kconfig"
 endmenu

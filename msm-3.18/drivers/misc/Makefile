@@ -61,6 +61,7 @@ ifdef CONFIG_COMPAT
 obj-$(CONFIG_QSEECOM) += compat_qseecom.o
 endif
 obj-$(CONFIG_ECHO)		+= echo/
+obj-$(CONFIG_J1708) += j1708/
 obj-$(CONFIG_VEXPRESS_SYSCFG)	+= vexpress-syscfg.o
 obj-$(CONFIG_CXL_BASE)		+= cxl/
 obj-y				+= qcom/
@@ -73,3 +74,4 @@ obj-$(CONFIG_MEMORY_STATE_TIME) += memory_state_time.o
 obj-$(CONFIG_APDS9930)		+= apds993x.o
 obj-$(CONFIG_UID_SYS_STATS) += uid_sys_stats.o
 obj-$(CONFIG_MEMORY_STATE_TIME) += memory_state_time.o
+obj-y				+= dev_info/
