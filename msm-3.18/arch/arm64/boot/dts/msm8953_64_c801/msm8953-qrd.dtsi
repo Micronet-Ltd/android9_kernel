@@ -176,8 +176,6 @@
 		qcom,rpull-up-kohm = <10>;
 		qcom,vref-batt-therm-uv = <1800000>;
 		#include "batterydata-hwe30100100_2p-c801-4v2-6600mah_10k.dtsi"
-		#include "batterydata-4v35-4500mah.dtsi"
-		#include "batterydata-4v35-4500mah_47k.dtsi"
 	};
 };
 
