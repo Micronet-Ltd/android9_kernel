@@ -417,7 +417,8 @@ enum wake_reason {
 #define	HVDCP_OTG_VOTER			"HVDCP_OTG_VOTER"
 #define	HVDCP_PULSING_VOTER		"HVDCP_PULSING_VOTER"
 
-static int smbchg_debug_mask;
+static int smbchg_debug_mask = 	PR_INTERRUPT | PR_TYPEC;
+
 module_param_named(
 	debug_mask, smbchg_debug_mask, int, S_IRUSR | S_IWUSR
 );
@@ -479,7 +480,7 @@ module_param_named(
 #define pr_smb(reason, fmt, ...)				\
 	do {							\
 		if (smbchg_debug_mask & (reason))		\
-			pr_info(fmt, ##__VA_ARGS__);		\
+			pr_notice(fmt, ##__VA_ARGS__);		\
 		else						\
 			pr_debug(fmt, ##__VA_ARGS__);		\
 	} while (0)
@@ -1721,7 +1722,7 @@ static int smbchg_set_usb_current_max(struct smbchg_chip *chip,
 							rc);
 			} else {
 				/* default to 500mA */
-				current_ma = CURRENT_500_MA;
+				current_ma = CURRENT_900_MA;
 			}
 			pr_smb(PR_STATUS,
 				"override_usb_current=%d current_ma set to %d\n",
@@ -1801,6 +1802,31 @@ static int smbchg_set_usb_current_max(struct smbchg_chip *chip,
 				goto out;
 			}
 			chip->usb_max_current_ma = 900;
+		}
+		
+		if (chip->cfg_override_usb_current) {
+			current_ma = CURRENT_1500_MA;
+			pr_notice("%s:%d:current_ma = %d\n",__FUNCTION__,__LINE__,current_ma);
+			if (current_ma == CURRENT_1500_MA) {
+				/*
+				 * allow setting the current value as reported
+				 * by USB driver.
+				 */
+				rc = smbchg_set_high_usb_chg_current(chip,
+							current_ma);
+				if (rc < 0) {
+					pr_err("Couldn't set %dmA rc = %d\n",
+							current_ma, rc);
+					goto out;
+				}
+				rc = smbchg_masked_write(chip,
+					chip->usb_chgpth_base + CMD_IL,
+					ICL_OVERRIDE_BIT, ICL_OVERRIDE_BIT);
+				if (rc < 0)
+					pr_err("Couldn't set ICL override rc = %d\n",rc);
+						chip->usb_max_current_ma = 1500;
+			}
+
 		}
 		break;
 	case POWER_SUPPLY_TYPE_USB_CDP:
@@ -4353,7 +4379,7 @@ static int smbchg_register_chg_led(struct smbchg_chip *chip)
 	chip->led_cdev.name = "red";
 	chip->led_cdev.brightness_set = smbchg_chg_led_brightness_set;
 	chip->led_cdev.brightness_get = smbchg_chg_led_brightness_get;
-
+	
 	rc = led_classdev_register(chip->dev, &chip->led_cdev);
 	if (rc) {
 		dev_err(chip->dev, "unable to register charger led, rc=%d\n",
@@ -8710,7 +8736,7 @@ static int smbchg_probe(struct spmi_device *spmi)
 	update_usb_status(chip, is_usb_present(chip), false);
 	dump_regs(chip);
 	create_debugfs_entries(chip);
-	dev_info(chip->dev,
+	dev_notice(chip->dev,
 		"SMBCHG successfully probe Charger version=%s Revision DIG:%d.%d ANA:%d.%d batt=%d dc=%d usb=%d\n",
 			version_str[chip->schg_version],
 			chip->revision[DIG_MAJOR], chip->revision[DIG_MINOR],

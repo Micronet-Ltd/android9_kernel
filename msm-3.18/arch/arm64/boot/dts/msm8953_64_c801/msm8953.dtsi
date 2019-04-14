@@ -756,6 +756,7 @@
 		dmas = <&dma_blsp1 6 64 0x20000020 0x20>,
 			<&dma_blsp1 7 32 0x20000020 0x20>;
 		dma-names = "tx", "rx";
+		status = "disabled";
 
 		/* DSI_TO_HDMI I2C configuration */
 		adv7533@39 {
@@ -777,6 +778,7 @@
 			qcom,max-voltage-level = <0>;
 			qcom,enable-load = <0>;
 			qcom,disable-load = <0>;
+			status = "disabled";
 		};
 	};
 

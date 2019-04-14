@@ -302,6 +302,13 @@ static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 		pr_err("%s: failed to disable vregs for %s\n",
 			__func__, __mdss_dsi_pm_name(DSI_PANEL_PM));
 
+    if (gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
+        ret=gpio_direction_output(ctrl_pdata->disp_en_gpio, 0);
+        if (ret) {
+            pr_err("%s: failed to set enable_gpio\n", __func__);
+        }
+    }
+	mdelay(150);
 end:
 	return ret;
 }
@@ -315,9 +322,18 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 		pr_err("%s: Invalid input data\n", __func__);
 		return -EINVAL;
 	}
+
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
-
+	
+    if (gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
+        ret=gpio_direction_output(ctrl_pdata->disp_en_gpio, 1);
+        if (ret) {
+            pr_err("%s: failed to set enable_gpio\n", __func__);
+            return ret;
+        }
+    }
+	
 	ret = msm_dss_enable_vreg(
 		ctrl_pdata->panel_power_data.vreg_config,
 		ctrl_pdata->panel_power_data.num_vreg, 1);
@@ -1709,8 +1725,7 @@ static int mdss_dsi_blank(struct mdss_panel_data *pdata, int power_state)
 			ATRACE_BEGIN("dsi_panel_off");
 			ret = ctrl_pdata->off(pdata);
 			if (ret) {
-				pr_err("%s: Panel OFF failed\n",
-					__func__);
+				pr_err("%s: Panel OFF failed\n", __func__);
 				goto error;
 			}
 			ATRACE_END("dsi_panel_off");
@@ -4084,7 +4099,6 @@ static int mdss_dsi_parse_gpio_params(struct platform_device *ctrl_pdev,
 {
 	struct mdss_panel_info *pinfo = &(ctrl_pdata->panel_data.panel_info);
 	struct mdss_panel_data *pdata = &ctrl_pdata->panel_data;
-
 	/*
 	 * If disp_en_gpio has been set previously (disp_en_gpio > 0)
 	 *  while parsing the panel node, then do not override it

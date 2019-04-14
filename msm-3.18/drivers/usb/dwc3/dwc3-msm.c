@@ -11,6 +11,8 @@
  *
  */
 
+#define pr_fmt(fmt) "%s %s: " fmt, KBUILD_MODNAME, __func__
+
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/slab.h>
@@ -275,6 +277,8 @@ struct dwc3_msm {
 	struct pm_qos_request   pm_qos_req_dma;
 	struct delayed_work     perf_vote_work;
 	enum dwc3_perf_mode	curr_mode;
+    int cradle_state;
+    int vbus_reg_enabled;
 };
 
 #define USB_HSPHY_3P3_VOL_MIN		3050000 /* uV */
@@ -1790,7 +1794,7 @@ static void dwc3_msm_notify_event(struct dwc3 *dwc, unsigned event,
 
 	switch (event) {
 	case DWC3_CONTROLLER_ERROR_EVENT:
-		dev_info(mdwc->dev,
+		dev_notice(mdwc->dev,
 			"DWC3_CONTROLLER_ERROR_EVENT received, irq cnt %lu\n",
 			dwc->irq_cnt);
 
@@ -1845,7 +1849,7 @@ static void dwc3_msm_notify_event(struct dwc3 *dwc, unsigned event,
 		dwc->tx_fifo_size = mdwc->tx_fifo_size;
 		break;
 	case DWC3_CONTROLLER_CONNDONE_EVENT:
-		dev_dbg(mdwc->dev, "DWC3_CONTROLLER_CONNDONE_EVENT received\n");
+		dev_notice(mdwc->dev, "DWC3_CONTROLLER_CONNDONE_EVENT\n");
 		/*
 		 * Add power event if the dbm indicates coming out of L1 by
 		 * interrupt
@@ -1858,7 +1862,7 @@ static void dwc3_msm_notify_event(struct dwc3 *dwc, unsigned event,
 		atomic_set(&dwc->in_lpm, 0);
 		break;
 	case DWC3_CONTROLLER_NOTIFY_OTG_EVENT:
-		dev_dbg(mdwc->dev, "DWC3_CONTROLLER_NOTIFY_OTG_EVENT received\n");
+		dev_notice(mdwc->dev, "DWC3_CONTROLLER_NOTIFY_OTG_EVENT\n");
 		if (dwc->enable_bus_suspend) {
 			mdwc->suspend = dwc->b_suspend;
 			queue_delayed_work(mdwc->dwc3_resume_wq,
@@ -1866,7 +1870,7 @@ static void dwc3_msm_notify_event(struct dwc3 *dwc, unsigned event,
 		}
 		break;
 	case DWC3_CONTROLLER_SET_CURRENT_DRAW_EVENT:
-		dev_dbg(mdwc->dev, "DWC3_CONTROLLER_SET_CURRENT_DRAW_EVENT received\n");
+		dev_notice(mdwc->dev, "DWC3_CONTROLLER_SET_CURRENT_DRAW_EVENT [%u mA]\n", dwc->vbus_draw);
 		dwc3_msm_gadget_vbus_draw(mdwc, dwc->vbus_draw);
 		break;
 	case DWC3_CONTROLLER_RESTART_USB_SESSION:
@@ -2034,7 +2038,6 @@ static void dwc3_set_phy_speed_flags(struct dwc3_msm *mdwc)
 			mdwc->hs_phy->flags |= PHY_LS_MODE;
 	}
 }
-
 
 static int dwc3_msm_suspend(struct dwc3_msm *mdwc)
 {
@@ -2288,7 +2291,7 @@ static int dwc3_msm_resume(struct dwc3_msm *mdwc)
 		mdwc->lpm_flags &= ~MDWC3_ASYNC_IRQ_WAKE_CAPABILITY;
 	}
 
-	dev_info(mdwc->dev, "DWC3 exited from low power mode\n");
+	dev_notice(mdwc->dev, "DWC3 exited from low power mode\n");
 
 	/* Enable core irq */
 	if (dwc->irq)
@@ -2331,25 +2334,31 @@ static void dwc3_ext_event_notify(struct dwc3_msm *mdwc)
 
 	if (mdwc->id_state == DWC3_ID_FLOAT) {
 		dbg_event(0xFF, "ID set", 0);
+        dev_notice(mdwc->dev, "otg id is float\n");
 		set_bit(ID, &mdwc->inputs);
 	} else {
 		dbg_event(0xFF, "ID clear", 0);
+        dev_notice(mdwc->dev, "otg id is ground\n");
 		clear_bit(ID, &mdwc->inputs);
 	}
 
 	if (mdwc->vbus_active && !mdwc->in_restart) {
 		dbg_event(0xFF, "BSV set", 0);
+        dev_notice(mdwc->dev, "b session is valid\n");
 		set_bit(B_SESS_VLD, &mdwc->inputs);
 	} else {
 		dbg_event(0xFF, "BSV clear", 0);
+        dev_notice(mdwc->dev, "b session is invalid\n");
 		clear_bit(B_SESS_VLD, &mdwc->inputs);
 	}
 
 	if (mdwc->suspend) {
 		dbg_event(0xFF, "SUSP set", 0);
+        dev_notice(mdwc->dev, "set bus suspend\n");
 		set_bit(B_SUSPEND, &mdwc->inputs);
 	} else {
 		dbg_event(0xFF, "SUSP clear", 0);
+        dev_notice(mdwc->dev, "clear bus suspend\n");
 		clear_bit(B_SUSPEND, &mdwc->inputs);
 	}
 
@@ -2547,8 +2556,10 @@ static int dwc3_msm_power_set_property_usb(struct power_supply *psy,
 	enum dwc3_id_state id;
 
 	switch (psp) {
-	case POWER_SUPPLY_PROP_USB_OTG:
-		id = val->intval ? DWC3_ID_GROUND : DWC3_ID_FLOAT;
+    case POWER_SUPPLY_PROP_USB_OTG:
+        mdwc->cradle_state = (val->intval & 0x10)?1:0;
+		id = (val->intval & (~0x10)) ? DWC3_ID_GROUND : DWC3_ID_FLOAT;
+        dev_notice(mdwc->dev, "POWER_SUPPLY_PROP_USB_OTG :%d-->%d\n", mdwc->id_state, id);
 		if (mdwc->id_state == id)
 			break;
 
@@ -2981,6 +2992,8 @@ static int dwc3_msm_probe(struct platform_device *pdev)
 	}
 
 	mdwc->id_state = DWC3_ID_FLOAT;
+    mdwc->cradle_state = 0;
+    mdwc->vbus_reg_enabled = 0;
 	set_bit(ID, &mdwc->inputs);
 
 	mdwc->charging_disabled = of_property_read_bool(node,
@@ -3405,7 +3418,7 @@ static int dwc3_msm_remove(struct platform_device *pdev)
 	if (mdwc->bus_perf_client)
 		msm_bus_scale_unregister_client(mdwc->bus_perf_client);
 
-	if (!IS_ERR_OR_NULL(mdwc->vbus_reg))
+	if (!IS_ERR_OR_NULL(mdwc->vbus_reg) && mdwc->vbus_reg_enabled)
 		regulator_disable(mdwc->vbus_reg);
 
 	disable_irq(mdwc->hs_phy_irq);
@@ -3572,7 +3585,7 @@ static int dwc3_otg_start_host(struct dwc3_msm *mdwc, int on)
 	}
 
 	if (on) {
-		dev_dbg(mdwc->dev, "%s: turn on host\n", __func__);
+		dev_notice(mdwc->dev, "turn on host\n");
 
 		pm_runtime_get_sync(mdwc->dev);
 		dbg_event(0xFF, "StrtHost gync",
@@ -3580,8 +3593,14 @@ static int dwc3_otg_start_host(struct dwc3_msm *mdwc, int on)
 		mdwc->hs_phy->flags |= PHY_HOST_MODE;
 		mdwc->ss_phy->flags |= PHY_HOST_MODE;
 		usb_phy_notify_connect(mdwc->hs_phy, USB_SPEED_HIGH);
-		if (!IS_ERR(mdwc->vbus_reg))
-			ret = regulator_enable(mdwc->vbus_reg);
+		if (!IS_ERR(mdwc->vbus_reg)) {
+            if (mdwc->cradle_state) {
+                ret = 0;
+            } else {
+                ret = regulator_enable(mdwc->vbus_reg);
+                mdwc->vbus_reg_enabled = 1;
+            }
+        }
 		if (ret) {
 			dev_err(mdwc->dev, "unable to enable vbus_reg\n");
 			mdwc->hs_phy->flags &= ~PHY_HOST_MODE;
@@ -3609,8 +3628,10 @@ static int dwc3_otg_start_host(struct dwc3_msm *mdwc, int on)
 			dev_err(mdwc->dev,
 				"%s: failed to add XHCI pdev ret=%d\n",
 				__func__, ret);
-			if (!IS_ERR(mdwc->vbus_reg))
-				regulator_disable(mdwc->vbus_reg);
+			if (!IS_ERR(mdwc->vbus_reg) && mdwc->vbus_reg_enabled) {
+                regulator_disable(mdwc->vbus_reg);
+                mdwc->vbus_reg_enabled = 0;
+            }
 			mdwc->hs_phy->flags &= ~PHY_HOST_MODE;
 			mdwc->ss_phy->flags &= ~PHY_HOST_MODE;
 			pm_runtime_put_sync(mdwc->dev);
@@ -3658,11 +3679,16 @@ static int dwc3_otg_start_host(struct dwc3_msm *mdwc, int on)
 		schedule_delayed_work(&mdwc->perf_vote_work,
 			msecs_to_jiffies(1000 * PM_QOS_SAMPLE_SEC));
 	} else {
-		dev_dbg(mdwc->dev, "%s: turn off host\n", __func__);
+		dev_notice(mdwc->dev, "turn off host\n");
 
 		usb_unregister_atomic_notify(&mdwc->usbdev_nb);
-		if (!IS_ERR(mdwc->vbus_reg))
-			ret = regulator_disable(mdwc->vbus_reg);
+		if (!IS_ERR(mdwc->vbus_reg)) {
+            if (mdwc->vbus_reg_enabled) {
+                ret = regulator_disable(mdwc->vbus_reg); 
+            } else {
+                ret = 0;
+            }
+        }
 		if (ret) {
 			dev_err(mdwc->dev, "unable to disable vbus_reg\n");
 			return ret;
@@ -3821,7 +3847,7 @@ skip_psy_type:
 	if (mdwc->max_power == mA)
 		return 0;
 
-	dev_info(mdwc->dev, "Avail curr from USB = %u\n", mA);
+	dev_notice(mdwc->dev, "Avail curr from USB = %u\n", mA);
 
 	if (mdwc->max_power <= 2 && mA > 2) {
 		/* Enable Charging */

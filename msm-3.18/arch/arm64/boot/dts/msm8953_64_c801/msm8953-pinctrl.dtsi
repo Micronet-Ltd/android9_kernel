@@ -482,21 +482,6 @@
 					bias-pull-down; /* pull down */
 				};
 			};
-
-			mdss_dsi_gpio: mdss_dsi_gpio {
-				mux {
-					pins = "gpio141";
-					function = "gpio";
-				};
-
-				config {
-					pins = "gpio141";
-					drive-strength = <8>;
-					bias-pull-down;
-					output-low;
-				};
-			};
-
 		};
 
 		pmx_mdss_te {
@@ -577,6 +562,32 @@
 			};
 		};
 
+		blsp2_uart0_short_active: blsp2_uart0_short_active {
+			mux {
+				pins = "gpio16", "gpio17";
+				function = "msm_uart1";
+			};
+
+			config {
+				pins = "gpio16", "gpio17";
+				drive-strength = <16>;
+				bias-disable;
+			};
+		};
+
+		blsp2_uart0_short_sleep: blsp2_uart0_short_sleep {
+			mux {
+				pins = "gpio16", "gpio17";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio16", "gpio17";
+				drive-strength = <2>;
+				bias-disable;
+			};
+		};
+		
 		/* SDC pin type */
 		sdc1_clk_on: sdc1_clk_on {
 			config {
@@ -1655,33 +1666,6 @@
 				bias-disable;
 			};
 		};
-		peijian_dev_active {
-			peijian_dev_active: peijian_dev_active {
-				mux {
-					pins = "gpio107", "gpio6", "gpio4", "gpio16", "gpio7", "gpio22", "gpio13", "gpio5", "gpio17";
-					function = "gpio";
-				};
-				config {
-					pins = "gpio107", "gpio6", "gpio4", "gpio16", "gpio7", "gpio22", "gpio13", "gpio5", "gpio17";
-					drive-strength = <2>;
-					bias-pull-down;
-				};
-			};
-		};
-		
-		peijian_dev_irq {
-			peijian_dev_irq: peijian_dev_irq {
-				mux {
-					pins = "gpio36";
-					function = "gpio";
-				};
-				config {
-					pins = "gpio36";
-					drive-strength = <2>;
-					bias-pull-up;
-				};
-			};
-		};
 
 		ssusb_mode_sel: ssusb_mode_sel {
 			mux {
@@ -1696,5 +1680,67 @@
 				input-enable;
 			};
 		};
+/*
+mightn't be used now because i2c_c connected to mdss
+*/
+		watchdog_pin {
+			watchdog_pin_active: watchdog_pin_active {
+				mux {
+					pins = "gpio6", "gpio63";
+					function = "gpio";
+				};
+
+				config {
+					pins = "gpio6", "gpio63";
+					drive-strength = <2>;
+					bias-disable;
+				};
+			};
+
+			watchdog_pin_suspend: watchdog_pin_suspend {
+				mux {
+					pins = "gpio6", "gpio63";
+					function = "gpio";
+				};
+
+				config {
+					pins = "gpio6", "gpio63";
+					drive-strength = <2>;
+					bias-disable;
+				};
+			};
+		};
+/**/
+/*
+gpio97 otg_en control? usb switch hw controlled by vbus_cradle signal
+*/
+		dock {
+			dock_pins_active: dock_pins_active {
+				mux {
+					pins = "gpio12", "gpio13", "gpio36", "gpio97";
+					function = "gpio";
+				};
+
+				config {
+					pins = "gpio12", "gpio13", "gpio36", "gpio97";
+					drive-strength = <2>;
+					bias-pull-down;
+				};
+			};
+
+			dock_pin_suspend: dock_pin_suspend {
+				mux {
+					pins = "gpio12", "gpio13", "gpio36", "gpio97";
+					function = "gpio";
+				};
+
+				config {
+					pins = "gpio12", "gpio13", "gpio36", "gpio97";
+					drive-strength = <2>;
+					bias-pull-down;
+				};
+			};
+		};
+/**/
 	};
 };

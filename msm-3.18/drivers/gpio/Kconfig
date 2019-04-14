@@ -926,4 +926,11 @@ config GPIO_VIPERBOARD
           River Tech's viperboard.h for detailed meaning
           of the module parameters.
 
+config GPIO_WATCHDOG
+	tristate "Micronet host interface Watchdog"
+	depends on GPIOLIB && OF && ARCH_MSM8953
+	help
+	  This is the gpio based watchdog driver for the
+	  Micronet host interface in the Qualcomm MSM8953 platform.
+
 endif

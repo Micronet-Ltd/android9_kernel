@@ -71,5 +71,6 @@
 			1d 1a 03 05 01 03 04 a0];
 		qcom,dba-panel;
 		qcom,bridge-name = "adv7533";
+		status = "disabled";
 	};
 };
