@@ -56,7 +56,17 @@ static int32_t gpio_in_register_notifier(struct notifier_block *nb)
 #define VIRT_GPIO_INIT	1
 #define VIRT_GPIO_ON	2
 #define VGPIO_MAX 8
-
+//////////////////////////////////////////
+#define MCU_GPIO_MAX 160
+#define J1708_GPIO_OFFSET 64 //GPIO num 0 at group C 32*2 + 0 the driver 
+                              //will transfer it to the correct number
+                              //I couldn't keep with the MCU convention as GPIO 
+                              //nums in the device should be continuos
+#define RS48_GPIO_OFFSET 155 //GPIO num 27 at group E 32*4 +27 the driver 
+                              //will transfer it to the correct number
+                              //I couldn't keep with the MCU convention as GPIO 
+                              //nums in the device should be continuos
+////////////////////////////////////////////
 #define FORBID_EXT_SPKR	9
 enum e_dock_type {
     e_dock_type_unspecified = -1,
@@ -97,6 +107,10 @@ struct dock_switch_device {
     struct  dock_switch_attr attr_outs_mask_set;
     struct  dock_switch_attr attr_outs_mask_clr;
     struct  dock_switch_attr attr_dbg_state;
+    //////////////barak/////////////////////
+    struct  dock_switch_attr attr_J1708_en;
+    struct  dock_switch_attr attr_rs485_en;
+    ////////////////////////////////////////   
     spinlock_t outs_mask_lock;
     unsigned long lock_flags;
     unsigned outs_mask_state;
@@ -107,6 +121,12 @@ struct dock_switch_device {
     int outs_can_sleep;
     int outs_pins[VGPIO_MAX];
     struct delayed_work	vgpio_init_work;
+    /////////////////////////////
+    int mcu_pins[MCU_GPIO_MAX];
+    unsigned mcu_gpio_base;
+    unsigned mcu_gpio_num;
+    struct delayed_work	mcu_gpio_init_work;//used to initiate the mcu gpios
+
 };
 
 #include "../gpio/gpiolib.h"
@@ -178,6 +198,54 @@ static ssize_t ampl_show(struct device *dev, struct device_attribute *attr, char
 }
 
 static DEVICE_ATTR(ampl_enable, S_IRUGO|S_IWUSR|S_IWGRP, ampl_show, ampl_store);
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+static RAW_NOTIFIER_HEAD(cradle_connected_chain);
+static DEFINE_RAW_SPINLOCK(cradle_connected_chain_lock);
+
+enum NOTIFICATION_REASONS
+{
+    CONNETED_TO_BASIC_CRADLE = 1,
+    DISCONNECTED_FROM_BASIC_CRADLE = 2,
+    CONNETED_TO_SMART_CRADLE = 3,
+    DISCONNECTED_FROM_SMART_CRADLE = 4,
+};
+
+void cradle_connect_notify(unsigned long reason, void *arg)
+{
+    unsigned long flags;
+
+    raw_spin_lock_irqsave(&cradle_connected_chain_lock, flags);
+    raw_notifier_call_chain(&cradle_connected_chain, reason, 0);
+    raw_spin_unlock_irqrestore(&cradle_connected_chain_lock, flags);
+}
+
+int cradle_register_notifier(struct notifier_block *nb)
+{
+    unsigned long flags;
+    int err;
+
+    raw_spin_lock_irqsave(&cradle_connected_chain_lock, flags);
+    err = raw_notifier_chain_register(&cradle_connected_chain, nb);
+    raw_spin_unlock_irqrestore(&cradle_connected_chain_lock, flags);
+
+    return err;
+}
+EXPORT_SYMBOL(cradle_register_notifier);
+
+int cradle_unregister_notifier(struct notifier_block *nb)
+{
+    unsigned long flags;
+    int err;
+
+    raw_spin_lock_irqsave(&cradle_connected_chain_lock, flags);
+    err = raw_notifier_chain_unregister(&cradle_connected_chain, nb);
+    raw_spin_unlock_irqrestore(&cradle_connected_chain_lock, flags);
+
+    return err;
+}
+EXPORT_SYMBOL(cradle_unregister_notifier);
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 static int wait_for_stable_signal(int pin, int interim)
 {
@@ -676,6 +744,131 @@ static ssize_t dock_switch_outs_mask_clr_store(struct device *dev, struct device
     return err; 
 }
 
+///////////////////////////////////////barak/////////////////////////////////////////////////
+static ssize_t rs485_en_state_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+    char gp_file[64];
+    mm_segment_t prev_fs;
+    const int rs485_gpio_num = RS48_GPIO_OFFSET;
+    int fd = 0;
+    int err = 0;
+
+    prev_fs = get_fs();
+	set_fs(get_ds());
+
+    sprintf(gp_file, "/sys/class/gpio/gpio%d", rs485_gpio_num);
+    fd = sys_open(gp_file, O_RDWR, S_IRUSR|S_IRGRP);
+
+    if(fd)
+    {
+        err = sys_read(fd, gp_file, 8); 
+        sys_close(fd);
+        
+        if(err)
+        {
+            pr_err("error! couldn't connect to mcu");
+        }
+    }
+
+    set_fs(prev_fs);
+
+    return sprintf(buf,"%d\n", gp_file[0] - '0');
+}
+
+static ssize_t rs485_en_state_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+    int err = ENOENT; 
+    char gp_file[64];
+    const int rs485_gpio_num = RS48_GPIO_OFFSET;
+    int fd = 0;
+    mm_segment_t prev_fs;
+
+    prev_fs = get_fs();
+	set_fs(get_ds());
+ 
+
+
+    sprintf(gp_file, "/sys/class/gpio/gpio%d", rs485_gpio_num);
+    fd = sys_open(gp_file, O_RDWR, S_IRUSR|S_IRGRP);
+
+    if(fd)
+    {
+
+        err = sys_write(fd, buf, 1); 
+        sys_close(fd);
+        
+        if(err)
+        {
+            pr_err("error! couldn't connect to mcu");
+        }
+    }
+
+    set_fs(prev_fs);
+
+    return (err);
+}
+
+static ssize_t j1708_en_state_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+    char gp_file[64];
+    mm_segment_t prev_fs;
+    const int j1708_gpio_num = J1708_GPIO_OFFSET;
+    int fd = 0;
+    int err = 0;
+
+    prev_fs = get_fs();
+	set_fs(get_ds());
+
+    sprintf(gp_file, "/sys/class/gpio/gpio%d", j1708_gpio_num);
+    fd = sys_open(gp_file, O_RDWR, S_IRUSR|S_IRGRP);
+
+    if(fd)
+    {
+        err = sys_read(fd, gp_file, 8); 
+        sys_close(fd);
+        
+        if(err)
+        {
+            pr_err("error! couldn't connect to mcu");
+        }
+    }
+
+    set_fs(prev_fs);
+
+    return sprintf(buf,"%d\n", gp_file[0] - '0');
+}
+
+static ssize_t j1708_en_state_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+    int err = ENOENT; 
+    char gp_file[64];
+    const int j1708_gpio_num = J1708_GPIO_OFFSET;
+    int fd = 0;
+    mm_segment_t prev_fs;
+
+    prev_fs = get_fs();
+	set_fs(get_ds());
+ 
+    sprintf(gp_file, "/sys/class/gpio/gpio%d", j1708_gpio_num);
+    fd = sys_open(gp_file, O_RDWR, S_IRUSR|S_IRGRP);
+
+    if(fd)
+    {
+        err = sys_write(fd, buf, 1); 
+        sys_close(fd);
+        
+        if(err)
+        {
+            pr_err("error! couldn't connect to mcu");
+        }
+    }
+
+    set_fs(prev_fs);
+
+    return (err);
+}
+///////////////////////////////////////////////////////////////////////////////////////
+
 static ssize_t dock_switch_dbg_state_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
     struct switch_dev *sdev = (struct switch_dev *)dev_get_drvdata(dev);
@@ -706,6 +899,50 @@ static int gpc_lable_match(struct gpio_chip *gpc, void *lbl)
 {
 	return !strcmp(gpc->label, lbl);
 }
+
+////////////////////////////////////////////////////////////////////////////////////////
+
+static void mcu_gpio_init_work(struct work_struct *work)
+{
+    struct dock_switch_device *ds = container_of(work, struct dock_switch_device, mcu_gpio_init_work.work);
+    int  err =0, i = 0;
+//    int fd;
+//    char gpiochip_dir[32];
+      char gp_file[64];
+//    mm_segment_t prev_fs;
+    struct gpio_chip *gpc;
+
+    gpc = gpiochip_find("vgpio_mcu", gpc_lable_match);
+
+    if (gpc) {
+        ds->mcu_gpio_base = gpc->base;
+        ds->mcu_gpio_num  = gpc->ngpio;
+    pr_err("dock_switch_device %s %d num = %d\n", gpc->label, ds->mcu_gpio_base, ds->mcu_gpio_num);
+
+        for (i = 0; i < ds->mcu_gpio_num; ++i) {
+            if (gpio_is_valid(ds->mcu_gpio_base + i)) {
+                
+                sprintf(gp_file, "mcu_out_%d",i);
+                pr_err( "%s %d %p", gp_file, ds->mcu_gpio_base + i,ds->pdev);
+               err = devm_gpio_request(ds->pdev, ds->mcu_gpio_base + i, gp_file);
+                if (err) {
+                    pr_err("virtual out [%d] is busy!\n", *(ds->mcu_pins + i));
+                } else {
+                    ds->mcu_pins[i] = ds->mcu_gpio_base + i;
+                    gpio_direction_output(ds->mcu_pins[i], 0);
+                    gpio_export(ds->mcu_pins[i], 0);
+                }
+            }
+        }
+        pr_err("%s %d\n", gpc->label, ds->mcu_gpio_base);
+        
+        return;
+    }
+    pr_err("dock_switch_device %s %d num = %d\n", gpc->label, ds->mcu_gpio_base, ds->mcu_gpio_num);
+
+    schedule_delayed_work(&ds->mcu_gpio_init_work, msecs_to_jiffies(1000));
+}
+///////////////////////////////////////////////////////////////////////////////////////////////
 
 static void swithc_dock_outs_init_work(struct work_struct *work)
 {
@@ -1082,8 +1319,29 @@ static int dock_switch_probe(struct platform_device *pdev)
         sysfs_attr_init(&ds->attr_dbg_state.attr.attr);
         device_create_file((&ds->sdev)->dev, &ds->attr_dbg_state.attr);
 
+        /////////////////////////////////////////////////////////////////////////////////////////////
+        snprintf(ds->attr_J1708_en.name, sizeof(ds->attr_J1708_en.name) - 1, "J1708_en");
+        ds->attr_J1708_en.attr.attr.name  = ds->attr_dbg_state.name;
+        ds->attr_dbg_state.attr.attr.mode = S_IRUGO|S_IWUGO;/*666*/
+        ds->attr_dbg_state.attr.show = j1708_en_state_show;
+        ds->attr_dbg_state.attr.store = j1708_en_state_store;
+        sysfs_attr_init(&ds->attr_J1708_en.attr.attr);
+        device_create_file((&ds->sdev)->dev, &ds->attr_J1708_en.attr);
+
+        snprintf(ds->attr_rs485_en.name, sizeof(ds->attr_rs485_en.name) - 1, "rs485_en");
+        ds->attr_rs485_en.attr.attr.name = ds->attr_rs485_en.name;
+        ds->attr_rs485_en.attr.attr.mode = S_IRUGO|S_IWUGO;/*666*/
+        ds->attr_rs485_en.attr.show = rs485_en_state_show;
+        ds->attr_rs485_en.attr.store = rs485_en_state_store;
+        sysfs_attr_init(&ds->attr_rs485_en.attr.attr);
+        device_create_file((&ds->sdev)->dev, &ds->attr_rs485_en.attr);
+
         INIT_DELAYED_WORK(&ds->vgpio_init_work, swithc_dock_outs_init_work);
         schedule_delayed_work(&ds->vgpio_init_work, msecs_to_jiffies(100));
+        ////////////////////////////////////////////////////
+        
+        INIT_DELAYED_WORK(&ds->mcu_gpio_init_work, mcu_gpio_init_work);
+        schedule_delayed_work(&ds->mcu_gpio_init_work, msecs_to_jiffies(100));
 
         pr_notice("registered\n");
 
