@@ -125,6 +125,8 @@ struct dock_switch_device {
     int mcu_pins[MCU_GPIO_MAX];
     unsigned mcu_gpio_base;
     unsigned mcu_gpio_num;
+    unsigned j1708en_vgpio_num;
+    unsigned rs485en_vgpio_num;
     struct delayed_work	mcu_gpio_init_work;//used to initiate the mcu gpios
 
 };
@@ -749,14 +751,16 @@ static ssize_t rs485_en_state_show(struct device *dev, struct device_attribute *
 {
     char gp_file[64];
     mm_segment_t prev_fs;
-    const int rs485_gpio_num = RS48_GPIO_OFFSET;
     int fd = 0;
     int err = 0;
+
+    struct switch_dev *sdev = (struct switch_dev *)dev_get_drvdata(dev);
+    struct dock_switch_device *ds = container_of(sdev, struct dock_switch_device, sdev);
 
     prev_fs = get_fs();
 	set_fs(get_ds());
 
-    sprintf(gp_file, "/sys/class/gpio/gpio%d", rs485_gpio_num);
+    sprintf(gp_file, "/sys/class/gpio/gpio%d", ds->rs485en_vgpio_num);
     fd = sys_open(gp_file, O_RDWR, S_IRUSR|S_IRGRP);
 
     if(fd)
@@ -766,7 +770,7 @@ static ssize_t rs485_en_state_show(struct device *dev, struct device_attribute *
         
         if(err)
         {
-            pr_err("error! couldn't connect to mcu");
+            pr_err("error! couldn't connect to mcu on gpio %u ", ds->rs485en_vgpio_num);
         }
     }
 
@@ -779,16 +783,16 @@ static ssize_t rs485_en_state_store(struct device *dev, struct device_attribute 
 {
     int err = ENOENT; 
     char gp_file[64];
-    const int rs485_gpio_num = RS48_GPIO_OFFSET;
     int fd = 0;
     mm_segment_t prev_fs;
+
+    struct switch_dev *sdev = (struct switch_dev *)dev_get_drvdata(dev);
+    struct dock_switch_device *ds = container_of(sdev, struct dock_switch_device, sdev);
 
     prev_fs = get_fs();
 	set_fs(get_ds());
  
-
-
-    sprintf(gp_file, "/sys/class/gpio/gpio%d", rs485_gpio_num);
+    sprintf(gp_file, "/sys/class/gpio/gpio%d", ds->rs485en_vgpio_num);
     fd = sys_open(gp_file, O_RDWR, S_IRUSR|S_IRGRP);
 
     if(fd)
@@ -812,14 +816,16 @@ static ssize_t j1708_en_state_show(struct device *dev, struct device_attribute *
 {
     char gp_file[64];
     mm_segment_t prev_fs;
-    const int j1708_gpio_num = J1708_GPIO_OFFSET;
     int fd = 0;
     int err = 0;
+
+    struct switch_dev *sdev = (struct switch_dev *)dev_get_drvdata(dev);
+    struct dock_switch_device *ds = container_of(sdev, struct dock_switch_device, sdev);
 
     prev_fs = get_fs();
 	set_fs(get_ds());
 
-    sprintf(gp_file, "/sys/class/gpio/gpio%d", j1708_gpio_num);
+    sprintf(gp_file, "/sys/class/gpio/gpio%d", ds->j1708en_vgpio_num);
     fd = sys_open(gp_file, O_RDWR, S_IRUSR|S_IRGRP);
 
     if(fd)
@@ -829,7 +835,7 @@ static ssize_t j1708_en_state_show(struct device *dev, struct device_attribute *
         
         if(err)
         {
-            pr_err("error! couldn't connect to mcu");
+            pr_err("error! couldn't connect to mcuon gpio %u",ds->j1708en_vgpio_num);
         }
     }
 
@@ -842,14 +848,16 @@ static ssize_t j1708_en_state_store(struct device *dev, struct device_attribute 
 {
     int err = ENOENT; 
     char gp_file[64];
-    const int j1708_gpio_num = J1708_GPIO_OFFSET;
     int fd = 0;
     mm_segment_t prev_fs;
+
+    struct switch_dev *sdev = (struct switch_dev *)dev_get_drvdata(dev);
+    struct dock_switch_device *ds = container_of(sdev, struct dock_switch_device, sdev);
 
     prev_fs = get_fs();
 	set_fs(get_ds());
  
-    sprintf(gp_file, "/sys/class/gpio/gpio%d", j1708_gpio_num);
+    sprintf(gp_file, "/sys/class/gpio/gpio%d", ds->j1708en_vgpio_num);
     fd = sys_open(gp_file, O_RDWR, S_IRUSR|S_IRGRP);
 
     if(fd)
@@ -917,6 +925,9 @@ static void mcu_gpio_init_work(struct work_struct *work)
     if (gpc) {
         ds->mcu_gpio_base = gpc->base;
         ds->mcu_gpio_num  = gpc->ngpio;
+        ds->j1708en_vgpio_num = ds->mcu_gpio_base + J1708_GPIO_OFFSET;
+        ds->rs485en_vgpio_num = ds->mcu_gpio_base + RS48_GPIO_OFFSET;
+        
     pr_err("dock_switch_device %s %d num = %d\n", gpc->label, ds->mcu_gpio_base, ds->mcu_gpio_num);
 
         for (i = 0; i < ds->mcu_gpio_num; ++i) {
@@ -1322,9 +1333,9 @@ static int dock_switch_probe(struct platform_device *pdev)
         /////////////////////////////////////////////////////////////////////////////////////////////
         snprintf(ds->attr_J1708_en.name, sizeof(ds->attr_J1708_en.name) - 1, "J1708_en");
         ds->attr_J1708_en.attr.attr.name  = ds->attr_dbg_state.name;
-        ds->attr_dbg_state.attr.attr.mode = S_IRUGO|S_IWUGO;/*666*/
-        ds->attr_dbg_state.attr.show = j1708_en_state_show;
-        ds->attr_dbg_state.attr.store = j1708_en_state_store;
+        ds->attr_J1708_en.attr.attr.mode = S_IRUGO|S_IWUGO;/*666*/
+        ds->attr_J1708_en.attr.show = j1708_en_state_show;
+        ds->attr_J1708_en.attr.store = j1708_en_state_store;
         sysfs_attr_init(&ds->attr_J1708_en.attr.attr);
         device_create_file((&ds->sdev)->dev, &ds->attr_J1708_en.attr);
 
