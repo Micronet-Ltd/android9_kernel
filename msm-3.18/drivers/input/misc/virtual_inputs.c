@@ -199,7 +199,6 @@ static void vinputs_work_func(struct work_struct *work)
 	val = vinputs_get_gpios(0); 
 
 	pr_notice("%s: gpio 0x%X\n", __func__, (unsigned int)val);
-    printk(KERN_EMERG "%s: gpio 0x%X\n",__func__,(unsigned int)val);
 
 	for (i = 0; i < qty; i++) {
 		v = (test_bit(i, &val)) ? (KEY_F1 + i) : 0;
