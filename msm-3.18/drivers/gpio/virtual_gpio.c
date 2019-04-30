@@ -461,7 +461,7 @@ static int virt_gpio_out_request(struct gpio_chip *chip, unsigned offset)
 static int virt_gpio_mcu_request(struct gpio_chip *chip, unsigned offset)
 {
 	//struct virt_gpio * dev = g_pvpgio;
-	pr_err("%s() %d\n", __func__, offset);
+	//pr_err("%s() %d\n", __func__, offset);
 	//set_bit(offset&0x1F/*modulo 32*/, (unsigned long *)&dev->enabled_mcu[offset>>5/*dividing by 32*/]);
 
 	return 0;
@@ -642,7 +642,7 @@ static int virt_gpio_mcu_direction_input(struct gpio_chip *chip, unsigned offset
 
 static int virt_gpio_mcu_direction_output(struct gpio_chip *chip, unsigned offset, int value)
 {
-	printk("%s() set output and offset %d to %d\n", __func__, offset, value);
+	//printk("%s() set output and offset %d to %d\n", __func__, offset, value);
 
 	//virt_gpio_mcu_set(chip, offset,value);
 

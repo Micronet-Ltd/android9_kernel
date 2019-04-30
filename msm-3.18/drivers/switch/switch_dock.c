@@ -760,7 +760,9 @@ static ssize_t rs485_en_state_show(struct device *dev, struct device_attribute *
     prev_fs = get_fs();
 	set_fs(get_ds());
 
-    sprintf(gp_file, "/sys/class/gpio/gpio%d", ds->rs485en_vgpio_num);
+    pr_err("rs485en : /sys/class/gpio/gpio%d/value", ds->rs485en_vgpio_num);
+
+    sprintf(gp_file, "/sys/class/gpio/gpio%d/value", ds->rs485en_vgpio_num);
     fd = sys_open(gp_file, O_RDWR, S_IRUSR|S_IRGRP);
 
     if(fd)
@@ -791,8 +793,10 @@ static ssize_t rs485_en_state_store(struct device *dev, struct device_attribute 
 
     prev_fs = get_fs();
 	set_fs(get_ds());
+
+    pr_err("rs485en : /sys/class/gpio/gpio%d/value", ds->rs485en_vgpio_num);
  
-    sprintf(gp_file, "/sys/class/gpio/gpio%d", ds->rs485en_vgpio_num);
+    sprintf(gp_file, "/sys/class/gpio/gpio%d/value", ds->rs485en_vgpio_num);
     fd = sys_open(gp_file, O_RDWR, S_IRUSR|S_IRGRP);
 
     if(fd)
@@ -825,7 +829,9 @@ static ssize_t j1708_en_state_show(struct device *dev, struct device_attribute *
     prev_fs = get_fs();
 	set_fs(get_ds());
 
-    sprintf(gp_file, "/sys/class/gpio/gpio%d", ds->j1708en_vgpio_num);
+    pr_err("j1708en : /sys/class/gpio/gpio%d/value", ds->j1708en_vgpio_num);
+
+    sprintf(gp_file, "/sys/class/gpio/gpio%d/value", ds->j1708en_vgpio_num);
     fd = sys_open(gp_file, O_RDWR, S_IRUSR|S_IRGRP);
 
     if(fd)
@@ -835,7 +841,7 @@ static ssize_t j1708_en_state_show(struct device *dev, struct device_attribute *
         
         if(err)
         {
-            pr_err("error! couldn't connect to mcuon gpio %u",ds->j1708en_vgpio_num);
+            pr_err("error! couldn't connect to mcu on gpio %u err = %u",ds->j1708en_vgpio_num,err);
         }
     }
 
@@ -856,8 +862,10 @@ static ssize_t j1708_en_state_store(struct device *dev, struct device_attribute 
 
     prev_fs = get_fs();
 	set_fs(get_ds());
+
+    pr_err("j1708en : /sys/class/gpio/gpio%d/value", ds->j1708en_vgpio_num);
  
-    sprintf(gp_file, "/sys/class/gpio/gpio%d", ds->j1708en_vgpio_num);
+    sprintf(gp_file, "/sys/class/gpio/gpio%d/value", ds->j1708en_vgpio_num);
     fd = sys_open(gp_file, O_RDWR, S_IRUSR|S_IRGRP);
 
     if(fd)
@@ -1331,8 +1339,10 @@ static int dock_switch_probe(struct platform_device *pdev)
         device_create_file((&ds->sdev)->dev, &ds->attr_dbg_state.attr);
 
         /////////////////////////////////////////////////////////////////////////////////////////////
+if(0)
+{
         snprintf(ds->attr_J1708_en.name, sizeof(ds->attr_J1708_en.name) - 1, "J1708_en");
-        ds->attr_J1708_en.attr.attr.name  = ds->attr_dbg_state.name;
+        ds->attr_J1708_en.attr.attr.name  = ds->attr_J1708_en.name;
         ds->attr_J1708_en.attr.attr.mode = S_IRUGO|S_IWUGO;/*666*/
         ds->attr_J1708_en.attr.show = j1708_en_state_show;
         ds->attr_J1708_en.attr.store = j1708_en_state_store;
@@ -1346,14 +1356,16 @@ static int dock_switch_probe(struct platform_device *pdev)
         ds->attr_rs485_en.attr.store = rs485_en_state_store;
         sysfs_attr_init(&ds->attr_rs485_en.attr.attr);
         device_create_file((&ds->sdev)->dev, &ds->attr_rs485_en.attr);
-
+}
         INIT_DELAYED_WORK(&ds->vgpio_init_work, swithc_dock_outs_init_work);
         schedule_delayed_work(&ds->vgpio_init_work, msecs_to_jiffies(100));
         ////////////////////////////////////////////////////
-        
+
+if(0)
+{
         INIT_DELAYED_WORK(&ds->mcu_gpio_init_work, mcu_gpio_init_work);
         schedule_delayed_work(&ds->mcu_gpio_init_work, msecs_to_jiffies(100));
-
+}
         pr_notice("registered\n");
 
         return 0;
