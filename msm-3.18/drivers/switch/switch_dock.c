@@ -202,6 +202,7 @@ static ssize_t ampl_show(struct device *dev, struct device_attribute *attr, char
 static DEVICE_ATTR(ampl_enable, S_IRUGO|S_IWUSR|S_IWGRP, ampl_show, ampl_store);
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
+/*
 static RAW_NOTIFIER_HEAD(cradle_connected_chain);
 static DEFINE_RAW_SPINLOCK(cradle_connected_chain_lock);
 
@@ -247,6 +248,7 @@ int cradle_unregister_notifier(struct notifier_block *nb)
     return err;
 }
 EXPORT_SYMBOL(cradle_unregister_notifier);
+*/
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 static int wait_for_stable_signal(int pin, int interim)
@@ -1369,11 +1371,9 @@ static int dock_switch_probe(struct platform_device *pdev)
         INIT_DELAYED_WORK(&ds->mcu_gpio_init_work, mcu_gpio_init_work);
         schedule_delayed_work(&ds->mcu_gpio_init_work, msecs_to_jiffies(100));
         ////////////////////////////////////////////////////
-
+        
         INIT_DELAYED_WORK(&ds->vgpio_init_work, swithc_dock_outs_init_work);
         schedule_delayed_work(&ds->vgpio_init_work, msecs_to_jiffies(100));
-             
-        pr_notice("registered\n");
 
         return 0;
     } while (0);
