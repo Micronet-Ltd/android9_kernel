@@ -27,7 +27,7 @@ MODULE_LICENSE("Dual BSD/GPL");
 #define TURN_A9_GPIO_NUM_TO_MCU(x) (((x>>5)<<8)|(x&0x1f))		 
 #define IS_CONNECTED(reason) (reason&1u)//look in switch_dock.c for enum NOTIFICATION_REASONS 
 									    //to understand the logic here 
-#define TO_FOR_MCU_RESP_MS 12000 //the timeout that each user space thread is waiting
+#define TO_FOR_MCU_RESP_MS 6000 //the timeout that each user space thread is waiting
 
 
 #define	MCU_FREE_BIT (1 << 0)   //this bit in the MCU mask signals that there are no pending request to the MCU
@@ -54,23 +54,37 @@ typedef enum {
 	GET = COMM_READ_REQ,
 }mcu_gpio_op_t;
 
+//from the MCU
+typedef enum _gpio_pin_direction {
+	kGpioDigitalInput  = 0U, 
+	kGpioDigitalOutput = 1U  
+} gpio_pin_direction_t;
+
 typedef struct {
 	int gpio_num;
-	int gpio_value;
 	mcu_gpio_op_t op;
 }op_info_t;
 
 struct mcu_bank {
 	wait_queue_head_t mcu_wq;//will be used to sleep and wait for response from the MCU 
-								  //in case a value needs to be retrieved
-								//Note that this queue possesses a lock so mcu_bank
-								//doesn't need one
-	wait_queue_head_t respond_wq;//will be used by a single!! user space thread at a time 
-							 //to sleep while waiting for the MCU to retrieve a response value to the user
- 	unsigned long mcu_gpio_mask;
+								//in case a value needs to be retrieved
+
+	#ifdef VGPIO_USE_SPINLOCK //Will be used to wait for response from the MCU
+	spinlock_t lock;
+	#else
+	struct mutex lock;
+	#endif
+
+	uint32_t mcu_gpio_value[5];
+ 	uint32_t mcu_gpio_mask[5];
+	uint32_t mcu_gpio_dir[5];
 	 
 	op_info_t gpio_info;
+	bool returned_gpio_val;
+	volatile bool returned_flag; 
+
 };
+
 /*
 //defined in switch dock and is used to inform
 extern int cradle_register_notifier(struct notifier_block *nb);
@@ -269,12 +283,22 @@ static unsigned int vgpio_dev_poll(struct file *file, poll_table *wait)
 {
 	struct virt_gpio *dev = file->private_data;
 	unsigned int mask = 0;
+	int i = 0;
+	uint8_t should_connect = 0;
+
 	DEFINE_LOCK_FLAGS(flags);
 
-	LOCK_BANK(dev->gpo_bank.lock, flags);
+	LOCK_BANK(dev->mcu_gpio_bank.lock, flags);
 
 	poll_wait(file, &dev->gpo_bank.wq, wait);
-	if (dev->gpo_bank.gpio_mask || (WAIT_FOR_PROCESS_BIT & dev->mcu_gpio_bank.mcu_gpio_mask))
+
+	//check if the mask is 0
+	for(i = 0; i < 5 ;++i)
+	{
+		should_connect += dev->mcu_gpio_bank.mcu_gpio_mask[i];
+	}
+	
+	if (dev->gpo_bank.gpio_mask || should_connect)
 	{
 		mask |= POLLIN | POLLRDNORM;
 	}
@@ -286,14 +310,15 @@ static unsigned int vgpio_dev_poll(struct file *file, poll_table *wait)
 static ssize_t virt_gpio_chr_read(struct file *file, char __user *buf,
 								  size_t count, loff_t *ppos)
 {
-	struct virt_gpio *dev = file->private_data;
+struct virt_gpio *dev = file->private_data;
 	uint8_t output[6]; //maximal possible data size needed to transfer info
-	int w = 4;		   //default output size
+	int w = 4;  //default output size
+	int port = 0;
+	unsigned long offset;
+	uint32_t offset_mask;
 	unsigned long out_mask;
 	unsigned long out_values;
-	unsigned int gpio_num;
-
-	unsigned long flags; // for spin lock
+	uint32_t should_connect = 0;
 
 	output[1] = (uint8_t)GPIO_INT_STATUS; //default, this place in the data should signal the ioriver/control
 										  //which kind of operation should it do
@@ -304,21 +329,48 @@ static ssize_t virt_gpio_chr_read(struct file *file, char __user *buf,
 		return -EINVAL;
 	}
 
-	//check which action should be done by the iodriver/control after reading this value
-	spin_lock_irqsave(&(dev->mcu_gpio_bank.mcu_wq.lock), flags);
+	//not that after this loop port holds the following index to the
+	//index of the first port that has a gpio that should be set/get
+	// and should_connect holds the bit map of this port
+	while(!should_connect && port < 5)
+	{
+		should_connect = dev->mcu_gpio_bank.mcu_gpio_mask[port];
+		++port;
+	}
 
-	/*if a set/get request is waiting to be processed and to be sent to the MCU:*/
-	(WAIT_FOR_PROCESS_BIT&(dev->mcu_gpio_bank.mcu_gpio_mask)) ?
-		dev->mcu_gpio_bank.mcu_gpio_mask = 0,
-	    //set the variables from the protected buffer, mcu_gpio_bank to local ones
-		output[1] = dev->mcu_gpio_bank.gpio_info.op,
-		/*use the macro defined in the MCU to the one defined in the MCU*/
-		gpio_num = dev->mcu_gpio_bank.gpio_info.gpio_num,
-		out_values = dev->mcu_gpio_bank.gpio_info.gpio_value
-		: 0 /*Don't do anything while the lock is closed*/;
+	--port;
 
-	spin_unlock_irqrestore(&(dev->mcu_gpio_bank.mcu_wq.lock), flags);
+	//if there is a port that should b set/get
+	if(should_connect)
+	{
+		//find the offset_mask, note that the variable offset_mask is not the offset
+		// itself but a variable with 1 in the right offset and 0 anywhere else
+		offset_mask = 1;
+		offset = 0;
+		while(!(should_connect&offset_mask))
+		{
+			offset_mask>>=1;
+			++offset;
+		}
 
+		//clean the bit in the mask 
+		dev->mcu_gpio_bank.mcu_gpio_mask[port] &= ~offset_mask;
+
+		//extract the value from the value mask
+		out_values = (offset_mask&(dev->mcu_gpio_bank.mcu_gpio_value[port]));
+
+		//use the direction mask to check whether it is a read or write request
+		if(kGpioDigitalOutput == (offset_mask&(dev->mcu_gpio_bank.mcu_gpio_dir[port])))
+		{
+			output[1] = COMM_WRITE_REQ;
+		}
+		else
+		{
+			output[1] = COMM_READ_REQ;
+		}	
+	}
+
+	//send the request
 	switch(output[1])
 	{	
 		//This is the last implementation of the virtual GPIO before MCU-GPIO was added
@@ -361,12 +413,12 @@ static ssize_t virt_gpio_chr_read(struct file *file, char __user *buf,
 
 	case COMM_READ_REQ:
 		w = 5;
-		pr_err("COMM_READ_REQ!, %ul %u %u",gpio_num,(uint8_t)(gpio_num >> 8), (uint8_t)(gpio_num & 0xFF));
+		pr_err("COMM_READ_REQ!");
 		output[0] = 0;
 		//output[1] was set already
 		output[2] = 0; //iodriver will set that
-		output[3] = (uint8_t)(gpio_num >> 8);
-		output[4] = (uint8_t)(gpio_num & 0xFF);
+		output[3] = (uint8_t)(port);
+		output[4] = (uint8_t)(offset);
 
 		if (copy_to_user(buf, output, w))
 			return -EINVAL;
@@ -374,17 +426,13 @@ static ssize_t virt_gpio_chr_read(struct file *file, char __user *buf,
 		return w;
 		break; //switch case COMM_READ_REQ
 	case COMM_WRITE_REQ:
-		//free the buffer after it was used, note that this action is not protected
-		//or atomic as right now (31/3/2019) the logic dictates that in this case
-		// it is not as important it might not be the case in the future
-		dev->mcu_gpio_bank.mcu_gpio_mask = MCU_FREE_BIT;
 		w = 6;
 		pr_err("COMM_READ_REQ!");
 		output[0] = 0;
 		//output[1] was set already
 		output[2] = 0; //iodriver will set that
-		output[3] = (uint8_t)(gpio_num >> 8);
-		output[4] = (uint8_t)(gpio_num & 0xFF);
+		output[3] = (uint8_t)(port);
+		output[4] = (uint8_t)(offset);
 		output[5] = (uint8_t)out_values;
 
 		if (copy_to_user(buf, output, w))
@@ -410,7 +458,6 @@ static ssize_t virt_gpio_chr_write(struct file *file, const char __user *buf,
 	uint8_t msg[4];
 	int i;
 	uint8_t val = 0;
-	unsigned long flags;
 
 	if (count != 4)
 		return -EINVAL;
@@ -429,16 +476,13 @@ static ssize_t virt_gpio_chr_write(struct file *file, const char __user *buf,
 	pr_err("writing %02d %02d\n", msg[2], msg[3]);
 
 	//Now check whether a user thread is waiting for response
-	spin_lock_irqsave(&(dev->mcu_gpio_bank.mcu_wq.lock), flags);
-	if ((dev->mcu_gpio_bank.mcu_gpio_mask) & WAIT_FOR_PROCESS_BIT)
+	if (COMM_READ_RESP == msg[2])
 	{
-		dev->mcu_gpio_bank.gpio_info.gpio_value = msg[2];
-		spin_unlock_irqrestore(&(dev->mcu_gpio_bank.mcu_wq.lock), flags);
+		dev->mcu_gpio_bank.returned_gpio_val = (bool)msg[3];
+		dev->mcu_gpio_bank.returned_flag = (bool)1; 
 	}
 	else
 	{
-		spin_unlock_irqrestore(&(dev->mcu_gpio_bank.mcu_wq.lock), flags);
-
 		// TODO: use macro
 		for (i = 0; i < dev->gpiochip_in.ngpio; i++)
 		{
@@ -526,80 +570,65 @@ static int virt_gpio_out_get(struct gpio_chip *chip, unsigned offset)
 static void virt_gpio_mcu_set(struct gpio_chip *chip, unsigned offset, int value)
 {
 	struct virt_gpio *dev = g_pvpgio;
-	unsigned long flags;
-	spin_lock_irqsave(&(dev->mcu_gpio_bank.mcu_wq.lock), flags);
-	/*in case mcu_gpio_bank is free to pass information between the user threads and the read function
-	  only one of the threads should be free to do so as only one request can be sent to the MCU at once,
-	  this is why I've(Barak) choose to use the "exclusive" flag in here, it also provides thread safety 
-	  to this design*/
-	if (0 == wait_event_interruptible_exclusive_locked(dev->mcu_gpio_bank.mcu_wq,
-													   (MCU_FREE_BIT & (dev->mcu_gpio_bank.mcu_gpio_mask))))
-	{
-		//Set the request
-		dev->mcu_gpio_bank.gpio_info.gpio_num = TURN_A9_GPIO_NUM_TO_MCU(offset);
-		dev->mcu_gpio_bank.gpio_info.gpio_value = value;
-		dev->mcu_gpio_bank.gpio_info.op = SET;
+	int port, bit_index;
 
-		//signals vgpio_dev_poll that there
-		//is a new pending request to the MCU
-		//also removes MCU_FREE_BIT to signal other
-		//set/get threads that mcu_gpio_bank is no longer free
-		dev->mcu_gpio_bank.mcu_gpio_mask = WAIT_FOR_PROCESS_BIT;
+	port = offset/32;/*power of two so the compiler will turn this to a shift*/
+	bit_index = offset%32;/*power of two so the compiler will do this with a mask*/
+
+	DEFINE_LOCK_FLAGS(flags); // make last
+
+	pr_debug("%s() offset %d value %d\n", __func__, offset, value);
+
+	LOCK_BANK(dev->mcu_gpio_bank.lock, flags);
+
+	//only in case this gpio is output
+	if(kGpioDigitalOutput == test_bit(bit_index, (unsigned long *)&dev->mcu_gpio_bank.mcu_gpio_dir[port]))
+	{
+		//set the mask the bit in the mask to signal poll/read and the value
+		__set_bit(bit_index, (unsigned long *)&dev->mcu_gpio_bank.mcu_gpio_mask[port]);
+		if (value)
+			__set_bit(bit_index, (unsigned long *)&dev->mcu_gpio_bank.mcu_gpio_value[port]);
+		else
+			__clear_bit(bit_index, (unsigned long *)&dev->mcu_gpio_bank.mcu_gpio_value[port]);
 	}
-	spin_unlock_irqrestore(&(dev->mcu_gpio_bank.mcu_wq.lock), flags);
+
+	UNLOCK_BANK(dev->mcu_gpio_bank.lock, flags);
+
 }
 
 static int virt_gpio_mcu_get(struct gpio_chip *chip, unsigned offset)
 {
 	struct virt_gpio *dev = g_pvpgio;
-	unsigned long flags;
-	int ret = 0;
+	int port, bit_index, ret;
 
-	spin_lock_irqsave(&(dev->mcu_gpio_bank.mcu_wq.lock), flags);
-	/*in case mcu_gpio_bank is free to pass information between the user threads and the read function
-	  only one of the threads should be free to do so as only one request can be sent to the MCU at once,
-	  this is why I've(Barak) chosen to use the "exclusive" flag in here' it also provides thread safety 
-	  with this design*/
-	if (0 == wait_event_interruptible_exclusive_locked(dev->mcu_gpio_bank.mcu_wq,
-													   (MCU_FREE_BIT & (dev->mcu_gpio_bank.mcu_gpio_mask))))
-	{
-		//Set the request
-		dev->mcu_gpio_bank.gpio_info.gpio_num = TURN_A9_GPIO_NUM_TO_MCU(offset);
-		dev->mcu_gpio_bank.gpio_info.gpio_value = 0;
-		dev->mcu_gpio_bank.gpio_info.op = GET;
-
-		//signals vgpio_dev_poll that there
-		//is a new pending request to the MCU
-		//also removes MCU_FREE_BIT to signal other
-		//set/get threads that mcu_gpio_bank is no longer free
-		dev->mcu_gpio_bank.mcu_gpio_mask = WAIT_FOR_PROCESS_BIT;
-		pr_err("%s() Wait for process bit %lu\n", __func__, (WAIT_FOR_PROCESS_BIT & (dev->mcu_gpio_bank.mcu_gpio_mask)));
-	}
-
-	//now wait for the elapsed time for a response from the MCU,note that a mutex might be better
-	//used in here, but the user space process that connects to the MCU: the iodriver might crash
-	//and this thread will be locked forever with all the others trying to access this virtual
-	//file so a lock iplementation with a timeout is mandatory here
-	if (0 < wait_event_interruptible_lock_irq_timeout(dev->mcu_gpio_bank.respond_wq,
-													  (RETURNED_FROM_MCU_BIT & (dev->mcu_gpio_bank.mcu_gpio_mask)),
-													  dev->mcu_gpio_bank.mcu_wq.lock,	  //this lock protects the data retreived in gpio_info
-													  msecs_to_jiffies(TO_FOR_MCU_RESP_MS) //timeout
-													  ))
-	{
-
-		ret = dev->mcu_gpio_bank.gpio_info.gpio_value; // get the retrieved value
-	}
-	/*	else
-	{
-
-		//to add signal the user that the timer has passed
+	port = offset/32;/*power of two so the compiler will turn this to a shift*/
+	bit_index = offset%32;/*power of two so the compiler will do this with a mask*/
 	
-		errno = ETIME;
-	}*/
+	DEFINE_LOCK_FLAGS(flags); // make last
 
-	dev->mcu_gpio_bank.mcu_gpio_mask = MCU_FREE_BIT; //After finishing ,signal other user threads that they are free
-													 //to prepeare a new request for the MCU
-	spin_unlock_irqrestore(&(dev->mcu_gpio_bank.mcu_wq.lock), flags);
+	pr_debug("%s() offset %d \n", __func__, offset);
+
+	LOCK_BANK(dev->mcu_gpio_bank.lock, flags);
+
+	//only if the gpio is input
+	if(kGpioDigitalInput == test_bit(bit_index, (unsigned long *)&(dev->mcu_gpio_bank.mcu_gpio_dir[port])))
+	{
+		//set the mask to signal poll and read to get this value
+		__set_bit(bit_index, (unsigned long *)&dev->mcu_gpio_bank.mcu_gpio_mask[port]);
+		UNLOCK_BANK(dev->mcu_gpio_bank.lock, flags);
+		//Wait for response
+		wait_event_interruptible_exclusive(dev->mcu_gpio_bank.mcu_wq, dev->mcu_gpio_bank.returned_flag);
+		dev->mcu_gpio_bank.returned_flag = 0;
+		LOCK_BANK(dev->mcu_gpio_bank.lock, flags);
+		dev->mcu_gpio_bank.mcu_gpio_value[bit_index]  =
+		dev->mcu_gpio_bank.returned_gpio_val ?
+		(dev->mcu_gpio_bank.mcu_gpio_value[bit_index] | ((uint32_t)1>>bit_index))
+		:
+		(dev->mcu_gpio_bank.mcu_gpio_value[bit_index] & ~((uint32_t)1>>bit_index));
+	}
+	ret = dev->mcu_gpio_bank.mcu_gpio_value[bit_index]&((uint32_t)1>>bit_index);
+	
+	UNLOCK_BANK(dev->mcu_gpio_bank.lock, flags);
 
 	return ret;
 }
@@ -650,19 +679,24 @@ static int virt_gpio_direction_output(struct gpio_chip *chip, unsigned offset, i
 
 static int virt_gpio_mcu_direction_input(struct gpio_chip *chip, unsigned offset)
 {
-	printk("%s() offset %d input\n", __func__, offset);
-	//lets set the two leftmost bits to signal the mcu that the device should be set to input(11) or output(10)
-	//those bits are not used by the regular mcu command
-	//offset |= (((unsigned)1<<(sizeof(offset) - 1) * 8/*bits in a byte*/));
-	virt_gpio_mcu_set(chip, offset, 0);
+	struct virt_gpio *dev = g_pvpgio;
+	int port, bit_index;
+	port = offset/32;/*power of two so the compiler will turn this to a shift*/
+	bit_index = offset%32;/*power of two so the compiler will do this with a mask*/
+	
+	__clear_bit(bit_index, (unsigned long *)&dev->mcu_gpio_bank.mcu_gpio_dir[port]);
+	
 	return 0;
 }
 
 static int virt_gpio_mcu_direction_output(struct gpio_chip *chip, unsigned offset, int value)
 {
-	//printk("%s() set output and offset %d to %d\n", __func__, offset, value);
+	struct virt_gpio *dev = g_pvpgio;
+	int port, bit_index;
+	port = offset/32;/*power of two so the compiler will turn this to a shift*/
+	bit_index = offset%32;/*power of two so the compiler will do this with a mask*/
 
-	//virt_gpio_mcu_set(chip, offset,value);
+	__set_bit(bit_index, (unsigned long *)&dev->mcu_gpio_bank.mcu_gpio_dir[port]);
 
 	return 0;
 }
@@ -696,15 +730,14 @@ static int __init virtual_gpio_init(void)
 
 	init_waitqueue_head(&dev->gpo_bank.wq);
 	init_waitqueue_head(&dev->mcu_gpio_bank.mcu_wq);
-	init_waitqueue_head(&dev->mcu_gpio_bank.respond_wq);
 
 #ifdef VGPIO_USE_SPINLOCK
 	spin_lock_init(&dev->gpo_bank.lock);
+	spin_lock_init(&dev->mcu_gpio_bank.lock);
 #else
 	mutex_init(&dev->gpo_bank.lock);
+	mutex_init(&dev->mcu_gpio_bank.lock);
 #endif
-	//Set the mcu mask to it's initial state
-	dev->mcu_gpio_bank.mcu_gpio_mask = MCU_FREE_BIT;
 
 	ret = misc_register(&vgpio_dev);
 	if (ret)
