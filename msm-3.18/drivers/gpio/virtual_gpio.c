@@ -288,15 +288,15 @@ static unsigned int vgpio_dev_poll(struct file *file, poll_table *wait)
 
 	DEFINE_LOCK_FLAGS(flags);
 
-	LOCK_BANK(dev->mcu_gpio_bank.lock, flags);
-
 	poll_wait(file, &dev->gpo_bank.wq, wait);
 
+	LOCK_BANK(dev->mcu_gpio_bank.lock, flags);
 	//check if the mask is 0
 	for(i = 0; i < 5 ;++i)
 	{
 		should_connect += dev->mcu_gpio_bank.mcu_gpio_mask[i];
 	}
+	UNLOCK_BANK(dev->mcu_gpio_bank.lock, flags);
 	
 	if (dev->gpo_bank.gpio_mask || should_connect)
 	{
@@ -577,7 +577,7 @@ static void virt_gpio_mcu_set(struct gpio_chip *chip, unsigned offset, int value
 
 	DEFINE_LOCK_FLAGS(flags); // make last
 
-	pr_debug("%s() offset %d value %d\n", __func__, offset, value);
+	pr_err("%s() offset %d value %d\n", __func__, offset, value);
 
 	LOCK_BANK(dev->mcu_gpio_bank.lock, flags);
 
@@ -606,9 +606,11 @@ static int virt_gpio_mcu_get(struct gpio_chip *chip, unsigned offset)
 	
 	DEFINE_LOCK_FLAGS(flags); // make last
 
-	pr_debug("%s() offset %d \n", __func__, offset);
+	pr_err("%s() offset %d \n", __func__, offset);
 
 	LOCK_BANK(dev->mcu_gpio_bank.lock, flags);
+
+	pr_err("%s() after lock \n", __func__);
 
 	//only if the gpio is input
 	if(kGpioDigitalInput == test_bit(bit_index, (unsigned long *)&(dev->mcu_gpio_bank.mcu_gpio_dir[port])))
@@ -617,7 +619,9 @@ static int virt_gpio_mcu_get(struct gpio_chip *chip, unsigned offset)
 		__set_bit(bit_index, (unsigned long *)&dev->mcu_gpio_bank.mcu_gpio_mask[port]);
 		UNLOCK_BANK(dev->mcu_gpio_bank.lock, flags);
 		//Wait for response
+		pr_err("%s()  before wait\n", __func__);
 		wait_event_interruptible_exclusive(dev->mcu_gpio_bank.mcu_wq, dev->mcu_gpio_bank.returned_flag);
+		pr_err("%s()  after wait %d \n", __func__,dev->mcu_gpio_bank.returned_flag);
 		dev->mcu_gpio_bank.returned_flag = 0;
 		LOCK_BANK(dev->mcu_gpio_bank.lock, flags);
 		dev->mcu_gpio_bank.mcu_gpio_value[bit_index]  =
@@ -730,6 +734,8 @@ static int __init virtual_gpio_init(void)
 
 	init_waitqueue_head(&dev->gpo_bank.wq);
 	init_waitqueue_head(&dev->mcu_gpio_bank.mcu_wq);
+
+	dev->mcu_gpio_bank.returned_flag;
 
 #ifdef VGPIO_USE_SPINLOCK
 	spin_lock_init(&dev->gpo_bank.lock);
