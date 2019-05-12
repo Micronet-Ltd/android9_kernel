@@ -329,7 +329,7 @@ struct virt_gpio *dev = file->private_data;
 		return -EINVAL;
 	}
 
-	//not that after this loop port holds the following index to the
+	//note that after this loop port holds the following index to the
 	//index of the first port that has a gpio that should be set/get
 	// and should_connect holds the bit map of this port
 	while(!should_connect && port < 5)
@@ -582,14 +582,17 @@ static void virt_gpio_mcu_set(struct gpio_chip *chip, unsigned offset, int value
 	LOCK_BANK(dev->mcu_gpio_bank.lock, flags);
 
 	//only in case this gpio is output
-	if(kGpioDigitalOutput == test_bit(bit_index, (unsigned long *)&dev->mcu_gpio_bank.mcu_gpio_dir[port]))
+	if(kGpioDigitalOutput == (((1ul>>bit_index)&(dev->mcu_gpio_bank.mcu_gpio_dir[port]))))
 	{
 		//set the mask the bit in the mask to signal poll/read and the value
-		__set_bit(bit_index, (unsigned long *)&dev->mcu_gpio_bank.mcu_gpio_mask[port]);
+		dev->mcu_gpio_bank.mcu_gpio_mask[port]|=(1ul>>bit_index);
+		//__set_bit(bit_index, (unsigned long *)&dev->mcu_gpio_bank.mcu_gpio_mask[port]);
 		if (value)
-			__set_bit(bit_index, (unsigned long *)&dev->mcu_gpio_bank.mcu_gpio_value[port]);
+			dev->mcu_gpio_bank.mcu_gpio_value[port]|=(1ul>>bit_index);
+			//__set_bit(bit_index, (unsigned long *)&dev->mcu_gpio_bank.mcu_gpio_value[port]);
 		else
-			__clear_bit(bit_index, (unsigned long *)&dev->mcu_gpio_bank.mcu_gpio_value[port]);
+			dev->mcu_gpio_bank.mcu_gpio_value[port]&=(~(1u>>bit_index));
+			//__clear_bit(bit_index, (unsigned long *)&dev->mcu_gpio_bank.mcu_gpio_value[port]);
 	}
 
 	UNLOCK_BANK(dev->mcu_gpio_bank.lock, flags);
@@ -599,21 +602,23 @@ static void virt_gpio_mcu_set(struct gpio_chip *chip, unsigned offset, int value
 static int virt_gpio_mcu_get(struct gpio_chip *chip, unsigned offset)
 {
 	struct virt_gpio *dev = g_pvpgio;
-	int port, bit_index, ret;
+	unsigned int port, bit_index, ret;
 
-	port = offset/32;/*power of two so the compiler will turn this to a shift*/
-	bit_index = offset%32;/*power of two so the compiler will do this with a mask*/
+	port = (offset>>5);// dividing by 32
+	bit_index = (offset&31u);// modolu 32
 	
 	DEFINE_LOCK_FLAGS(flags); // make last
 
-	pr_err("%s() offset %d \n", __func__, offset);
+	pr_err("%s() bit_index %u, port %u offset %u \n", __func__,bit_index, port ,offset);
 
 	LOCK_BANK(dev->mcu_gpio_bank.lock, flags);
 
-	pr_err("%s() after lock \n", __func__);
-
+	pr_err("%s() after lock %u\n", __func__,(dev->mcu_gpio_bank.mcu_gpio_dir[port]));
+	pr_err("addr %p\n", &(dev->mcu_gpio_bank.mcu_gpio_dir[port]));
+	pr_err("direction %u\n", (dev->mcu_gpio_bank.mcu_gpio_dir[port]));
+	pr_err("bool %u",((1u>>bit_index)&(dev->mcu_gpio_bank.mcu_gpio_dir[port])));
 	//only if the gpio is input
-	if(kGpioDigitalInput == test_bit(bit_index, (unsigned long *)&(dev->mcu_gpio_bank.mcu_gpio_dir[port])))
+	if(kGpioDigitalInput == ((1u>>bit_index)&(dev->mcu_gpio_bank.mcu_gpio_dir[port])))
 	{
 		//set the mask to signal poll and read to get this value
 		__set_bit(bit_index, (unsigned long *)&dev->mcu_gpio_bank.mcu_gpio_mask[port]);
@@ -688,7 +693,7 @@ static int virt_gpio_mcu_direction_input(struct gpio_chip *chip, unsigned offset
 	port = offset/32;/*power of two so the compiler will turn this to a shift*/
 	bit_index = offset%32;/*power of two so the compiler will do this with a mask*/
 	
-	__clear_bit(bit_index, (unsigned long *)&dev->mcu_gpio_bank.mcu_gpio_dir[port]);
+	dev->mcu_gpio_bank.mcu_gpio_dir[port]&=(~(1U>>bit_index));
 	
 	return 0;
 }
@@ -700,7 +705,7 @@ static int virt_gpio_mcu_direction_output(struct gpio_chip *chip, unsigned offse
 	port = offset/32;/*power of two so the compiler will turn this to a shift*/
 	bit_index = offset%32;/*power of two so the compiler will do this with a mask*/
 
-	__set_bit(bit_index, (unsigned long *)&dev->mcu_gpio_bank.mcu_gpio_dir[port]);
+	dev->mcu_gpio_bank.mcu_gpio_dir[port]|=(1U>>bit_index);
 
 	return 0;
 }
