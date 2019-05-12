@@ -65,6 +65,11 @@ typedef struct {
 	mcu_gpio_op_t op;
 }op_info_t;
 
+typedef enum mcu_status{
+	NO_REQUEST = 0,
+	REQUEST_SENT = 1,
+}mcu_response_t;
+
 struct mcu_bank {
 	wait_queue_head_t mcu_wq;//will be used to sleep and wait for response from the MCU 
 								//in case a value needs to be retrieved
@@ -81,7 +86,7 @@ struct mcu_bank {
 	 
 	op_info_t gpio_info;
 	bool returned_gpio_val;
-	volatile bool returned_flag; 
+	volatile mcu_response_t returned_flag; 
 
 };
 
@@ -476,10 +481,10 @@ static ssize_t virt_gpio_chr_write(struct file *file, const char __user *buf,
 	pr_err("writing %02d %02d\n", msg[2], msg[3]);
 
 	//Now check whether a user thread is waiting for response
-	if (COMM_READ_RESP == msg[2])
+	if (REQUEST_SENT == dev->mcu_gpio_bank.returned_flag && COMM_READ_RESP == msg[2])
 	{
 		dev->mcu_gpio_bank.returned_gpio_val = (bool)msg[3];
-		dev->mcu_gpio_bank.returned_flag = (bool)1; 
+		dev->mcu_gpio_bank.returned_flag = (bool)NO_REQUEST; 
 	}
 	else
 	{
@@ -612,28 +617,27 @@ static int virt_gpio_mcu_get(struct gpio_chip *chip, unsigned offset)
 	pr_err("%s() bit_index %u, port %u offset %u \n", __func__,bit_index, port ,offset);
 
 	LOCK_BANK(dev->mcu_gpio_bank.lock, flags);
-
-	pr_err("%s() after lock %u\n", __func__,(dev->mcu_gpio_bank.mcu_gpio_dir[port]));
+/*
 	pr_err("addr %p\n", &(dev->mcu_gpio_bank.mcu_gpio_dir[port]));
 	pr_err("direction %u\n", (dev->mcu_gpio_bank.mcu_gpio_dir[port]));
-	pr_err("bool %u",((1u>>bit_index)&(dev->mcu_gpio_bank.mcu_gpio_dir[port])));
+	pr_err("bool %u",((1u>>bit_index)&(dev->mcu_gpio_bank.mcu_gpio_dir[port])));*/
 	//only if the gpio is input
 	if(kGpioDigitalInput == ((1u>>bit_index)&(dev->mcu_gpio_bank.mcu_gpio_dir[port])))
 	{
 		//set the mask to signal poll and read to get this value
-		__set_bit(bit_index, (unsigned long *)&dev->mcu_gpio_bank.mcu_gpio_mask[port]);
+		dev->mcu_gpio_bank.mcu_gpio_mask[port] |= ((uint32_t)1>>bit_index);
+		//__set_bit(bit_index, (unsigned long *)&dev->mcu_gpio_bank.mcu_gpio_mask[port]);
 		UNLOCK_BANK(dev->mcu_gpio_bank.lock, flags);
 		//Wait for response
 		pr_err("%s()  before wait\n", __func__);
-		wait_event_interruptible_exclusive(dev->mcu_gpio_bank.mcu_wq, dev->mcu_gpio_bank.returned_flag);
+		dev->mcu_gpio_bank.returned_flag = REQUEST_SENT;
+		wait_event_interruptible_exclusive(dev->mcu_gpio_bank.mcu_wq, NO_REQUEST == dev->mcu_gpio_bank.returned_flag);
 		pr_err("%s()  after wait %d \n", __func__,dev->mcu_gpio_bank.returned_flag);
-		dev->mcu_gpio_bank.returned_flag = 0;
 		LOCK_BANK(dev->mcu_gpio_bank.lock, flags);
-		dev->mcu_gpio_bank.mcu_gpio_value[bit_index]  =
 		dev->mcu_gpio_bank.returned_gpio_val ?
-		(dev->mcu_gpio_bank.mcu_gpio_value[bit_index] | ((uint32_t)1>>bit_index))
+		(dev->mcu_gpio_bank.mcu_gpio_value[bit_index] |= ((uint32_t)1>>bit_index))
 		:
-		(dev->mcu_gpio_bank.mcu_gpio_value[bit_index] & ~((uint32_t)1>>bit_index));
+		(dev->mcu_gpio_bank.mcu_gpio_value[bit_index] &= ~((uint32_t)1>>bit_index));
 	}
 	ret = dev->mcu_gpio_bank.mcu_gpio_value[bit_index]&((uint32_t)1>>bit_index);
 	
@@ -740,7 +744,7 @@ static int __init virtual_gpio_init(void)
 	init_waitqueue_head(&dev->gpo_bank.wq);
 	init_waitqueue_head(&dev->mcu_gpio_bank.mcu_wq);
 
-	dev->mcu_gpio_bank.returned_flag;
+	dev->mcu_gpio_bank.returned_flag = NO_REQUEST;
 
 #ifdef VGPIO_USE_SPINLOCK
 	spin_lock_init(&dev->gpo_bank.lock);
