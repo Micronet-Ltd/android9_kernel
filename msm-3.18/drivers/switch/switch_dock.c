@@ -949,7 +949,7 @@ static void mcu_gpio_init_work(struct work_struct *work)
                     pr_err("virtual out [%d] is busy!\n", (ds->j1708en_vgpio_num));
                 } else {
                     ds->mcu_pins[J1708_GPIO_OFFSET] = ds->j1708en_vgpio_num;
-                    gpio_direction_output(ds->mcu_pins[J1708_GPIO_OFFSET], 0);
+                    gpio_direction_input(ds->mcu_pins[J1708_GPIO_OFFSET]);
                     gpio_export(ds->mcu_pins[J1708_GPIO_OFFSET], 0);
                 }
             }
@@ -962,7 +962,7 @@ static void mcu_gpio_init_work(struct work_struct *work)
                     pr_err("virtual out [%d] is busy!\n", (ds->rs485en_vgpio_num));
                 } else {
                     ds->mcu_pins[RS48_GPIO_OFFSET] = ds->rs485en_vgpio_num;
-                    gpio_direction_output(ds->mcu_pins[RS48_GPIO_OFFSET], 0);
+                    gpio_direction_input(ds->mcu_pins[RS48_GPIO_OFFSET]);
                     gpio_export(ds->mcu_pins[RS48_GPIO_OFFSET], 0);
                 }
             }
@@ -1354,7 +1354,7 @@ static int dock_switch_probe(struct platform_device *pdev)
 
         snprintf(ds->attr_J1708_en.name, sizeof(ds->attr_J1708_en.name) - 1, "J1708_en");
         ds->attr_J1708_en.attr.attr.name  = ds->attr_J1708_en.name;
-        ds->attr_J1708_en.attr.attr.mode = S_IRUGO|S_IWUGO;/*666*/
+        ds->attr_J1708_en.attr.attr.mode = S_IRUGO|S_IWUGO;//666
         ds->attr_J1708_en.attr.show = j1708_en_state_show;
         ds->attr_J1708_en.attr.store = j1708_en_state_store;
         sysfs_attr_init(&ds->attr_J1708_en.attr.attr);
@@ -1362,7 +1362,7 @@ static int dock_switch_probe(struct platform_device *pdev)
 
         snprintf(ds->attr_rs485_en.name, sizeof(ds->attr_rs485_en.name) - 1, "rs485_en");
         ds->attr_rs485_en.attr.attr.name = ds->attr_rs485_en.name;
-        ds->attr_rs485_en.attr.attr.mode = S_IRUGO|S_IWUGO;/*666*/
+        ds->attr_rs485_en.attr.attr.mode = S_IRUGO|S_IWUGO;//666
         ds->attr_rs485_en.attr.show = rs485_en_state_show;
         ds->attr_rs485_en.attr.store = rs485_en_state_store;
         sysfs_attr_init(&ds->attr_rs485_en.attr.attr);
@@ -1370,8 +1370,9 @@ static int dock_switch_probe(struct platform_device *pdev)
 
         INIT_DELAYED_WORK(&ds->mcu_gpio_init_work, mcu_gpio_init_work);
         schedule_delayed_work(&ds->mcu_gpio_init_work, msecs_to_jiffies(100));
+
         ////////////////////////////////////////////////////
-        
+
         INIT_DELAYED_WORK(&ds->vgpio_init_work, swithc_dock_outs_init_work);
         schedule_delayed_work(&ds->vgpio_init_work, msecs_to_jiffies(100));
 
