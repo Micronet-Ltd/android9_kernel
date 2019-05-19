@@ -323,7 +323,7 @@ struct virt_gpio *dev = file->private_data;
 	output[1] = (uint8_t)GPIO_INT_STATUS; //default, this place in the data should signal the ioriver/control
 										  //which kind of operation should it do
 	pr_err("%s() READ\n", __func__);
-	if (count < sizeof(output))
+	if (count < w)
 	{
 		pr_err("%s() count too small\n", __func__);
 		return -EINVAL;
