@@ -13,6 +13,7 @@
 qcom,c801_hwe30100100_2p_4v2_6600mah_10k {
 	/* #3794992_Lovdream_C801_HE_6600mAH_FG_averaged_MasterSlave_Jan9th2019*/
 	qcom,max-voltage-uv = <4200000>;
+	qcom,fastchg-current-ma = <2650>;
 	qcom,fg-cc-cv-threshold-mv = <4190>;
 	qcom,nom-batt-capacity-mah = <6600>;
 	qcom,batt-id-kohm = <10>;
