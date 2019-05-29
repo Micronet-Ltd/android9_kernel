@@ -307,8 +307,8 @@ static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
         if (ret) {
             pr_err("%s: failed to set enable_gpio\n", __func__);
         }
+		mdelay(150);
     }
-	mdelay(150);
 end:
 	return ret;
 }

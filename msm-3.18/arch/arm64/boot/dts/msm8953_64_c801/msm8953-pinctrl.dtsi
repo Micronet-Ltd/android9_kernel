@@ -482,6 +482,21 @@
 					bias-pull-down; /* pull down */
 				};
 			};
+
+			mdss_dsi_gpio: mdss_dsi_gpio {
+				mux {
+					pins = "gpio141";
+					function = "gpio";
+				};
+
+				config {
+					pins = "gpio141";
+					drive-strength = <8>;
+					bias-pull-down;
+					output-low;
+				};
+			};
+
 		};
 
 		pmx_mdss_te {
@@ -817,8 +832,8 @@
 		};
 
 		pmx_rd_nfc_int {
-			/*qcom,pins = <&gp 17>;*/
-			pins = "gpio17";
+			/*qcom,pins = <&gp 9>;*/
+			pins = "gpio9";
 			qcom,pin-func = <0>;
 			qcom,num-grp-pins = <1>;
 			label = "pmx_nfc_int";
@@ -835,8 +850,8 @@
 		};
 
 		pmx_nfc_reset {
-			/*qcom,pins = <&gp 16>;*/
-			pins = "gpio16";
+			/*qcom,pins = <&gp 8>;*/
+			pins = "gpio8";
 			qcom,pin-func = <0>;
 			qcom,num-grp-pins = <1>;
 			label = "pmx_nfc_disable";
@@ -1384,7 +1399,60 @@
 				};
 			};
 		};
+		/*add gt9xx by xzy*/
+		ts_int_default: ts_int_default {
+				mux {
+					pins = "gpio65";
+					function = "gpio";
+				};
 
+				config {
+					pins = "gpio65";
+					drive-strength = <16>;
+					bias-disable;
+					input-enable;
+				};
+			};
+			
+			ts_int_output_high: ts_int_output_high {
+				mux {
+					pins = "gpio65";
+					function = "gpio";
+				};
+
+				config {
+					pins = "gpio65";
+					/* drive-strength = <16>; */
+					output-high;
+				};
+			};
+			
+			ts_int_output_low: ts_int_output_low {
+				mux {
+					pins = "gpio65";
+					function = "gpio";
+				};
+
+				config {
+					pins = "gpio65";
+					/* drive-strength = <16>; */
+					output-low;
+				};
+			};
+			
+			ts_int_input: ts_int_input {
+				mux {
+					pins = "gpio65";
+					function = "gpio";
+				};
+
+				config {
+					pins = "gpio65";
+					bias-disable;
+					input-enable;
+				};
+			};
+		/*add end*/
 		tlmm_gpio_key {
 			gpio_key_active: gpio_key_active {
 				mux {
