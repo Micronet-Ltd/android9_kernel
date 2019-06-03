@@ -122,7 +122,7 @@ struct dock_switch_device {
     int outs_pins[VGPIO_MAX];
     struct delayed_work	vgpio_init_work;
     /////////////////////////////
-    int mcu_pins[MCU_GPIO_MAX];
+    int mcu_outs_pins[MCU_GPIO_MAX];
     unsigned mcu_gpio_base;
     unsigned mcu_gpio_num;
     unsigned j1708en_vgpio_num;
@@ -762,7 +762,7 @@ static ssize_t rs485_en_state_show(struct device *dev, struct device_attribute *
     prev_fs = get_fs();
 	set_fs(get_ds());
 
-    pr_err("rs485en : /sys/class/gpio/gpio%d/value", ds->rs485en_vgpio_num);
+    //pr_err("rs485en : /sys/class/gpio/gpio%d/value", ds->rs485en_vgpio_num);
 
     sprintf(gp_file, "/sys/class/gpio/gpio%d/value", ds->rs485en_vgpio_num);
     fd = sys_open(gp_file, O_RDWR, S_IRUSR|S_IRGRP);
@@ -780,6 +780,8 @@ static ssize_t rs485_en_state_show(struct device *dev, struct device_attribute *
 
     set_fs(prev_fs);
 
+    pr_err("return value %d,%c",gp_file[0],gp_file[0]);
+
     return sprintf(buf,"%d\n", gp_file[0] - '0');
 }
 
@@ -796,7 +798,7 @@ static ssize_t rs485_en_state_store(struct device *dev, struct device_attribute 
     prev_fs = get_fs();
 	set_fs(get_ds());
 
-    pr_err("rs485en : /sys/class/gpio/gpio%d/value", ds->rs485en_vgpio_num);
+    //pr_err("rs485en : /sys/class/gpio/gpio%d/value", ds->rs485en_vgpio_num);
  
     sprintf(gp_file, "/sys/class/gpio/gpio%d/value", ds->rs485en_vgpio_num);
     fd = sys_open(gp_file, O_RDWR, S_IRUSR|S_IRGRP);
@@ -807,9 +809,9 @@ static ssize_t rs485_en_state_store(struct device *dev, struct device_attribute 
         err = sys_write(fd, buf, 1); 
         sys_close(fd);
         
-        if(err)
+        if(1 != err)
         {
-            pr_err("error! couldn't connect to mcu");
+            pr_err("error! couldn't connect to mcu %d",err);
         }
     }
 
@@ -820,7 +822,7 @@ static ssize_t rs485_en_state_store(struct device *dev, struct device_attribute 
 
 static ssize_t j1708_en_state_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
-    char gp_file[64];
+    char gp_file[64] ;
     mm_segment_t prev_fs;
     int fd = 0;
     int err = 0;
@@ -846,6 +848,8 @@ static ssize_t j1708_en_state_show(struct device *dev, struct device_attribute *
             pr_err("error! couldn't connect to mcu on gpio %u err = %u",ds->j1708en_vgpio_num,err);
         }
     }
+
+    pr_err("j1708en value : %d, %c ",  gp_file[0],  gp_file[0]);
 
     set_fs(prev_fs);
 
@@ -875,9 +879,9 @@ static ssize_t j1708_en_state_store(struct device *dev, struct device_attribute 
         err = sys_write(fd, buf, 1); 
         sys_close(fd);
         
-        if(err)
+        if(1 != err)
         {
-            pr_err("error! couldn't connect to mcu");
+            pr_err("error! couldn't connect to mcu %d",err);
         }
     }
 
@@ -948,9 +952,9 @@ static void mcu_gpio_init_work(struct work_struct *work)
                 if (err) {
                     pr_err("virtual out [%d] is busy!\n", (ds->j1708en_vgpio_num));
                 } else {
-                    ds->mcu_pins[J1708_GPIO_OFFSET] = ds->j1708en_vgpio_num;
-                    gpio_direction_input(ds->mcu_pins[J1708_GPIO_OFFSET]);
-                    gpio_export(ds->mcu_pins[J1708_GPIO_OFFSET], 0);
+                    ds->mcu_outs_pins[J1708_GPIO_OFFSET] = ds->j1708en_vgpio_num;
+                    gpio_direction_output(ds->mcu_outs_pins[J1708_GPIO_OFFSET],0);
+                    gpio_export(ds->mcu_outs_pins[J1708_GPIO_OFFSET], 0);
                 }
             }
 
@@ -961,9 +965,9 @@ static void mcu_gpio_init_work(struct work_struct *work)
                 if (err) {
                     pr_err("virtual out [%d] is busy!\n", (ds->rs485en_vgpio_num));
                 } else {
-                    ds->mcu_pins[RS48_GPIO_OFFSET] = ds->rs485en_vgpio_num;
-                    gpio_direction_input(ds->mcu_pins[RS48_GPIO_OFFSET]);
-                    gpio_export(ds->mcu_pins[RS48_GPIO_OFFSET], 0);
+                    ds->mcu_outs_pins[RS48_GPIO_OFFSET] = ds->rs485en_vgpio_num;
+                    gpio_direction_output(ds->mcu_outs_pins[RS48_GPIO_OFFSET],0);
+                    gpio_export(ds->mcu_outs_pins[RS48_GPIO_OFFSET], 0);
                 }
             }
         
