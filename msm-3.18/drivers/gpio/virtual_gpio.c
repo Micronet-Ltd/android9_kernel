@@ -31,10 +31,10 @@ MODULE_LICENSE("Dual BSD/GPL");
 //I'll rather use the next macros instead of using the conventional kernel functions
 //because those functions recieves a 64 bit mask address and in the case of an error
 //in the input a wrong GPIO in another port might be affected/read while the casting
-//to uint32_t in the next macros will nullify the value if the bit_index will exceed 32
-#define TEST_BIT32(bit_map, bit_index) (bit_map & ((uint32_t)1 << bit_index))
-#define SET_BIT32(bit_map, bit_index) (bit_map |= ((uint32_t)1 << bit_index))
-#define CLEAR_BIT32(bit_map, bit_index) (bit_map &= (~((uint32_t)1 << bit_index)))
+//to uint32_t in the next macros will nullify the value if the bit_index will exceed 31
+#define TEST_BIT32(bit_map, bit_index) (bit_map & (((uint32_t)1)<<bit_index))
+#define SET_BIT32(bit_map, bit_index) (bit_map |= (((uint32_t)1)<<bit_index))
+#define CLEAR_BIT32(bit_map, bit_index) (bit_map &= (~(((uint32_t)1)<<bit_index)))
 
 //should be identical to the same enum in control.h
 typedef enum
@@ -311,7 +311,7 @@ static unsigned int vgpio_dev_poll(struct file *file, poll_table *wait)
 	struct virt_gpio *dev = file->private_data;
 	unsigned int mask = 0;
 	int i = 0;
-	uint8_t should_connect = 0;
+	uint64_t should_connect = 0;
 
 	DEFINE_LOCK_FLAGS(flags);
 
@@ -578,13 +578,15 @@ static void virt_gpio_mcu_set(struct gpio_chip *chip, unsigned offset, int value
 	//only in case this gpio is output
 	if (kGpioDigitalInput != TEST_BIT32(dev->mcu_gpio_bank.mcu_gpio_dir[port], bit_index))
 	{
-		pr_err("setting bits at %s() offset %d value %d\n", __func__, offset, value);
-		//set the mask the bit in the mask to signal poll/read and the value
-		SET_BIT32(dev->mcu_gpio_bank.mcu_gpio_mask[port], bit_index);
+		pr_err("setting bits at %s() offset %d value %d port %d bit_index %d \n", __func__, offset, value,port,bit_index);
+		
 		if (value)
 			SET_BIT32(dev->mcu_gpio_bank.mcu_gpio_value[port], bit_index);
 		else
 			CLEAR_BIT32(dev->mcu_gpio_bank.mcu_gpio_value[port], bit_index);
+		//set the mask the bit in the mask to signal poll/read and the value
+		SET_BIT32(dev->mcu_gpio_bank.mcu_gpio_mask[port], bit_index);
+		pr_err("mcu_gpio_mask %s() %d %d %d %d %d\n", __func__,dev->mcu_gpio_bank.mcu_gpio_mask[0],dev->mcu_gpio_bank.mcu_gpio_mask[1],dev->mcu_gpio_bank.mcu_gpio_mask[2],dev->mcu_gpio_bank.mcu_gpio_mask[3],dev->mcu_gpio_bank.mcu_gpio_mask[4] );
 	}
 
 	UNLOCK_BANK(dev->mcu_gpio_bank.lock, flags);
@@ -633,7 +635,7 @@ static int virt_gpio_mcu_get(struct gpio_chip *chip, unsigned offset)
 
 	UNLOCK_BANK(dev->mcu_gpio_bank.lock, flags);
 
-	return ret;
+	return (!!ret);
 }
 
 static int virt_gpio_in_get(struct gpio_chip *chip, unsigned offset)

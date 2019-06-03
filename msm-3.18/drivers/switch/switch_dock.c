@@ -772,7 +772,7 @@ static ssize_t rs485_en_state_show(struct device *dev, struct device_attribute *
         err = sys_read(fd, gp_file, 8); 
         sys_close(fd);
         
-        if(err)
+        if(8 != err)
         {
             pr_err("error! couldn't connect to mcu on gpio %u ", ds->rs485en_vgpio_num);
         }
@@ -843,7 +843,7 @@ static ssize_t j1708_en_state_show(struct device *dev, struct device_attribute *
         err = sys_read(fd, gp_file, 8); 
         sys_close(fd);
         
-        if(err)
+        if(8 != err)
         {
             pr_err("error! couldn't connect to mcu on gpio %u err = %u",ds->j1708en_vgpio_num,err);
         }
