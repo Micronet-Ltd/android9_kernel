@@ -780,7 +780,7 @@ static ssize_t rs485_en_state_show(struct device *dev, struct device_attribute *
 
     set_fs(prev_fs);
 
-    pr_err("return value %d,%c",gp_file[0],gp_file[0]);
+    //pr_err("return value %d,%c",gp_file[0],gp_file[0]);
 
     return sprintf(buf,"%d\n", gp_file[0] - '0');
 }
@@ -809,7 +809,7 @@ static ssize_t rs485_en_state_store(struct device *dev, struct device_attribute 
         err = sys_write(fd, buf, 1); 
         sys_close(fd);
         
-        if(1 != err)
+        if(-1 == err)
         {
             pr_err("error! couldn't connect to mcu %d",err);
         }
@@ -833,7 +833,7 @@ static ssize_t j1708_en_state_show(struct device *dev, struct device_attribute *
     prev_fs = get_fs();
 	set_fs(get_ds());
 
-    pr_err("j1708en : /sys/class/gpio/gpio%d/value", ds->j1708en_vgpio_num);
+    //pr_err("j1708en : /sys/class/gpio/gpio%d/value", ds->j1708en_vgpio_num);
 
     sprintf(gp_file, "/sys/class/gpio/gpio%d/value", ds->j1708en_vgpio_num);
     fd = sys_open(gp_file, O_RDWR, S_IRUSR|S_IRGRP);
@@ -849,7 +849,7 @@ static ssize_t j1708_en_state_show(struct device *dev, struct device_attribute *
         }
     }
 
-    pr_err("j1708en value : %d, %c ",  gp_file[0],  gp_file[0]);
+    //pr_err("j1708en value : %d, %c ",  gp_file[0],  gp_file[0]);
 
     set_fs(prev_fs);
 
@@ -879,7 +879,7 @@ static ssize_t j1708_en_state_store(struct device *dev, struct device_attribute 
         err = sys_write(fd, buf, 1); 
         sys_close(fd);
         
-        if(1 != err)
+        if(-1 == err)
         {
             pr_err("error! couldn't connect to mcu %d",err);
         }

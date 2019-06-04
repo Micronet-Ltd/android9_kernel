@@ -366,16 +366,16 @@ static ssize_t virt_gpio_chr_read(struct file *file, char __user *buf,
 	}
 
 	--port;
-	pr_err("GPIO MASK! %u %d",gpio_mask,port);
+	//pr_err("GPIO MASK! %u %d",gpio_mask,port);
 	if (gpio_mask)
 	{
-		pr_err("READ_OR_WRITE!");
+		//pr_err("READ_OR_WRITE!");
 
 		//clean the bit in the mask
 		dev->mcu_gpio_bank.mcu_gpio_mask[port] &= ~gpio_mask;
 
 		//extract the value from the value mask
-		value = (gpio_mask & (dev->mcu_gpio_bank.mcu_gpio_value[port]));
+		value = !!(gpio_mask & (dev->mcu_gpio_bank.mcu_gpio_value[port]));
 
 		//use the direction to check whether this is an output or input and use it to set the packet size
 		output_size = ((dev->mcu_gpio_bank.mcu_gpio_dir[port])&gpio_mask) == kGpioDigitalInput? 5/*read request size*/:
@@ -387,7 +387,7 @@ static ssize_t virt_gpio_chr_read(struct file *file, char __user *buf,
 			++offset;
 		}
 
-		pr_err("port offset: %u %lu",port,offset);
+		//pr_err("port offset value: %u %lu %u",port, offset,value);
 
 		//iodriver will set the first three parameters
 		output[0] = 0; 
@@ -399,7 +399,7 @@ static ssize_t virt_gpio_chr_read(struct file *file, char __user *buf,
 	}
 	else
 	{
-		pr_err("GPIO_INT_STATUS!");
+		//pr_err("GPIO_INT_STATUS!");
 		LOCK_BANK(dev->gpo_bank.lock, flags);
 		while (!dev->gpo_bank.gpio_mask)
 		{
@@ -578,7 +578,7 @@ static void virt_gpio_mcu_set(struct gpio_chip *chip, unsigned offset, int value
 	//only in case this gpio is output
 	if (kGpioDigitalInput != TEST_BIT32(dev->mcu_gpio_bank.mcu_gpio_dir[port], bit_index))
 	{
-		pr_err("setting bits at %s() offset %d value %d port %d bit_index %d \n", __func__, offset, value,port,bit_index);
+		//pr_err("setting bits at %s() offset %d value %d port %d bit_index %d \n", __func__, offset, value,port,bit_index);
 		
 		if (value)
 			SET_BIT32(dev->mcu_gpio_bank.mcu_gpio_value[port], bit_index);
@@ -586,7 +586,7 @@ static void virt_gpio_mcu_set(struct gpio_chip *chip, unsigned offset, int value
 			CLEAR_BIT32(dev->mcu_gpio_bank.mcu_gpio_value[port], bit_index);
 		//set the mask the bit in the mask to signal poll/read and the value
 		SET_BIT32(dev->mcu_gpio_bank.mcu_gpio_mask[port], bit_index);
-		pr_err("mcu_gpio_mask %s() %d %d %d %d %d\n", __func__,dev->mcu_gpio_bank.mcu_gpio_mask[0],dev->mcu_gpio_bank.mcu_gpio_mask[1],dev->mcu_gpio_bank.mcu_gpio_mask[2],dev->mcu_gpio_bank.mcu_gpio_mask[3],dev->mcu_gpio_bank.mcu_gpio_mask[4] );
+		//pr_err("mcu_gpio_value %s() %d %d %d %d %d\n", __func__,dev->mcu_gpio_bank.mcu_gpio_value[0],dev->mcu_gpio_bank.mcu_gpio_value[1],dev->mcu_gpio_bank.mcu_gpio_value[2],dev->mcu_gpio_bank.mcu_gpio_value[3],dev->mcu_gpio_bank.mcu_gpio_value[4] );
 	}
 
 	UNLOCK_BANK(dev->mcu_gpio_bank.lock, flags);
@@ -602,7 +602,7 @@ static int virt_gpio_mcu_get(struct gpio_chip *chip, unsigned offset)
 
 	DEFINE_LOCK_FLAGS(flags); // make last
 
-	pr_err("%s() bit_index %u, port %u offset %u \n", __func__, bit_index, port, offset);
+	//pr_err("%s() bit_index %u, port %u offset %u \n", __func__, bit_index, port, offset);
 
 	LOCK_BANK(dev->mcu_gpio_bank.lock, flags);
 
@@ -614,10 +614,10 @@ static int virt_gpio_mcu_get(struct gpio_chip *chip, unsigned offset)
 		//__set_bit(bit_index, (unsigned long *)&dev->mcu_gpio_bank.mcu_gpio_mask[port]);
 		UNLOCK_BANK(dev->mcu_gpio_bank.lock, flags);
 		//Wait for response
-		pr_err("%s() before wait\n", __func__);
+		//pr_err("%s() before wait\n", __func__);
 		dev->mcu_gpio_bank.returned_flag = REQUEST_SENT;
 		wait_event_interruptible_exclusive(dev->mcu_gpio_bank.mcu_wq, REQUEST_SENT != dev->mcu_gpio_bank.returned_flag);
-		pr_err("%s() after wait %d \n", __func__, dev->mcu_gpio_bank.returned_flag);
+		//pr_err("%s() after wait %d \n", __func__, dev->mcu_gpio_bank.returned_flag);
 		
 		if(NO_REQUEST != dev->mcu_gpio_bank.returned_flag)
 		{
