@@ -811,7 +811,7 @@ static ssize_t rs485_en_state_store(struct device *dev, struct device_attribute 
         
         if(-1 == err)
         {
-            pr_err("error! couldn't connect to mcu %d",err);
+            pr_err("failureb write to vgpio controller %d",err);
         }
     }
 
@@ -866,12 +866,13 @@ static ssize_t j1708_en_state_store(struct device *dev, struct device_attribute 
     struct switch_dev *sdev = (struct switch_dev *)dev_get_drvdata(dev);
     struct dock_switch_device *ds = container_of(sdev, struct dock_switch_device, sdev);
 
-    prev_fs = get_fs();
-	set_fs(get_ds());
-
-    pr_err("j1708en : /sys/class/gpio/gpio%d/value", ds->j1708en_vgpio_num);
+    pr_notice("%s: %d <-- %c", __func__, ds->j1708en_vgpio_num, buf[0]);
  
     sprintf(gp_file, "/sys/class/gpio/gpio%d/value", ds->j1708en_vgpio_num);
+
+    prev_fs = get_fs();
+    set_fs(get_ds());
+
     fd = sys_open(gp_file, O_RDWR, S_IRUSR|S_IRGRP);
 
     if(fd)
