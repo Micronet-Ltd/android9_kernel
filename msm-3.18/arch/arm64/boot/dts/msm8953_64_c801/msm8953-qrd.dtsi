@@ -75,39 +75,43 @@
 			reg = <0x5d>;
 			interrupt-parent = <&tlmm>;
 			interrupts = <65 0x2008>;
-			vdd-supply = <&pm8953_l10>;
+			vdd_ana-supply = <&pm8953_l10>;
 			vcc_i2c-supply = <&pm8953_l6>;
-			pinctrl-names = "pmx_ts_active","pmx_ts_suspend","pmx_ts_release";
-			pinctrl-0 = <&ts_int_active &ts_reset_active>;
-			pinctrl-1 = <&ts_int_suspend &ts_reset_suspend>;
-			pinctrl-2 = <&ts_release>;
+			pinctrl-names = "default","int-output-high","int-output-low","int-input";
+			pinctrl-0 = <&ts_int_default>;
+			pinctrl-1 = <&ts_int_output_high>;
+			pinctrl-2 = <&ts_int_output_low>;
+			pinctrl-3 = <&ts_int_input>;
 			reset-gpios = <&tlmm 64 0x00>;
-			interrupt-gpios = <&tlmm 65 0x2008>;
-			goodix,panel-coords = <0 0 800 1280>;
-			goodix,display-coords = <0 0 800 1450>;
-			goodix,product-id = "911";
-			//goodix,fw_name = "gtp_fw.bin";
-			goodix,driver-send-cfg;
-			goodix,cfg-group0 = [00 20 03 00 05 05 05 00 01 08 28 05 50 32 
-			03 05 00 00 00 00 00 00 00 00 00 00 00 8D 2D 88 17 15 31 0D 00 
-			00 02 9B 03 1D 00 00 00 00 00 03 00 00 00 00 00 0F 23 94 C5 02 
-			07 00 00 04 A3 10 00 8C 13 00 7B 16 00 68 1B 00 5B 20 00 5B 00 
-			00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
-			00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 04 05 06 07 08 
-			09 0C 0D 0E 0F 10 11 14 15 FF FF FF FF FF FF FF FF 00 00 00 00 
-			00 00 00 02 04 06 07 08 0A 0C 0F 10 11 12 13 19 1B 1C 1E 1F 20 
-			21 22 23 24 25 26 27 FF FF FF FF FF FF 00 00 00 00 00 00 00 00 00 00 05 01];
-	                goodix,cfg-group2 = [00 20 03 00 05 05 05 00 01 08 28 05 50 32 
-			03 05 00 00 00 00 00 00 00 00 00 00 00 8D 2D 88 17 15 31 0D 00 
-			00 02 9B 03 1D 00 00 00 00 00 03 00 00 00 00 00 0F 23 94 C5 02 
-			07 00 00 04 A3 10 00 8C 13 00 7B 16 00 68 1B 00 5B 20 00 5B 00 
-			00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
-			00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 04 05 06 07 08 
-			09 0C 0D 0E 0F 10 11 14 15 FF FF FF FF FF FF FF FF 00 00 00 00 
-			00 00 00 02 04 06 07 08 0A 0C 0F 10 11 12 13 19 1B 1C 1E 1F 20 
-			21 22 23 24 25 26 27 FF FF FF FF FF FF 00 00 00 00 00 00 00 00 00 00 05 01];
+			irq-gpios = <&tlmm 65 0x2008>;
+			irq-flags = <2>;
+			touchscreen-max-id = <11>;
+			touchscreen-size-x = <800>;
+			touchscreen-size-y = <1280>;
+			touchscreen-max-w = <512>;
+			touchscreen-max-p = <512>;
+			touchscreen-key-map = <59>,<158>,<139>, <60>;
+			goodix,slide-wakeup = <0>;
+			goodix,type-a-report = <0>;
+			goodix,driver-send-cfg = <0>;
+			goodix,resume-in-workqueue = <0>;
+			goodix,int-sync = <1>;
+			goodix,swap-x2y = <0>;
+			goodix,esd-protect = <1>;
+			goodix,auto-update-cfg = <0>;
+			goodix,power-off-sleep = <1>;	
+			goodix,pen-suppress-finger = <0>;
+			goodix,cfg-group0 = [65 20 03 00 05 0A 35 01 11 CF 28 0F 55 41 
+			03 05 00 00 00 00 00 00 06 18 1A 1E 14 8C 2E 0E 28 2A D6 07 00 
+			00 00 02 03 1C 00 00 00 00 00 00 00 00 00 00 00 1E 46 94 C5 02 
+			07 00 00 04 97 20 00 84 26 00 75 2D 00 67 36 00 5D 40 00 5D 08 
+			10 18 20 F0 4A 3A FF FF 27 00 00 00 00 00 00 00 00 00 00 00 00 
+			00 00 00 00 00 00 00 00 00 00 00 00 00 00 02 04 06 08 0A 0C 0E 
+			10 12 14 16 18 1A 1C FF FF FF FF FF FF FF FF FF FF FF FF FF FF 
+			FF FF 00 02 04 06 08 0A 0C 0F 10 12 13 14 16 18 1C 1D 1E 1F 20 
+			21 22 24 26 28 29 2A FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF AF 01];
 			};
-	};
+};
 /* kun.chen rm
 	vdd_vreg: vdd_vreg {
 		compatible = "regulator-fixed";
@@ -126,7 +130,6 @@
 			default-state = "off";
 			retain-state-suspended;
 		};
-
 		green {
 			gpios = <&tlmm 21 0x0>;
 			label = "green";
@@ -277,22 +280,22 @@
 
 &i2c_5 { /* BLSP2 QUP1 (NFC) */
 	nq@28 {
-		compatible = "nxp,pn547";
-		reg = <0x28>;
-		nxp,pn544-irq = <&tlmm 9 0x00>;
-		nxp,pn544-ven = <&tlmm 8 0x00>;
-		nxp,pn544-fw-dwnld = <&tlmm 62 0x0>;
-		qcom,clk-src = "BBCLK2";
-		qcom,clk-en-gpio = <&tlmm 0 0x00>;
-		interrupt-parent = <&tlmm>;
-		interrupts = <9 0>;
-		interrupt-names = "nfc_irq";
-		pinctrl-names = "nfc_active","nfc_suspend";
-		pinctrl-0 = <&nfc_int_active &nfc_disable_active>;
-		pinctrl-1 = <&nfc_int_suspend &nfc_disable_suspend>;
-		nxp,pn5xx-clkreq = <&pm8953_gpios 2 0>;
-		clocks = <&clock_gcc clk_bb_clk2_pin>;
-		clock-names = "ref_clk";
+		    compatible = "qcom,nq-nci";
+        	reg = <0x28>;
+        	qcom,nq-irq = <&tlmm 9 0x00>;
+        	qcom,nq-ven = <&tlmm 8 0x00>;
+        	qcom,nq-firm = <&tlmm 62 0x00>;
+        	qcom,nq-clkreq = <&pm8953_gpios 2 0x00>;
+        	qcom,clk-en-gpio = <&tlmm 0 0x00>;
+        	interrupt-parent = <&tlmm>;
+        	qcom,clk-src = "BBCLK2";
+        	interrupts = <9 0>;
+        	interrupt-names = "nfc_irq";
+        	pinctrl-names = "nfc_active", "nfc_suspend";
+        	pinctrl-0 = <&nfc_int_active &nfc_disable_active>;
+        	pinctrl-1 = <&nfc_int_suspend &nfc_disable_suspend>;
+        	clocks = <&clock_gcc clk_bb_clk2_pin>;
+        	clock-names = "ref_clk";
 	};
 };
 
