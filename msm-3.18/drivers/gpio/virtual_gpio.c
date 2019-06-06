@@ -602,7 +602,7 @@ static int virt_gpio_mcu_get(struct gpio_chip *chip, unsigned offset)
 
 	DEFINE_LOCK_FLAGS(flags); // make last
 
-	//pr_err("%s() bit_index %u, port %u offset %u \n", __func__, bit_index, port, offset);
+	pr_err("%s() bit_index %u, port %u offset %u \n", __func__, bit_index, port, offset);
 
 	LOCK_BANK(dev->mcu_gpio_bank.lock, flags);
 

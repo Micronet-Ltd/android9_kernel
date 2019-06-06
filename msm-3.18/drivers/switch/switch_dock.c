@@ -754,7 +754,7 @@ static ssize_t rs485_en_state_show(struct device *dev, struct device_attribute *
     struct switch_dev *sdev = (struct switch_dev *)dev_get_drvdata(dev);
     struct dock_switch_device *ds = container_of(sdev, struct dock_switch_device, sdev);
 
-    return gpio_get_value(ds->rs485en_vgpio_num);
+    return gpio_get_value(ds->mcu_outs_pins[RS48_GPIO_OFFSET]);
 }
 
 static ssize_t rs485_en_state_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
@@ -762,7 +762,9 @@ static ssize_t rs485_en_state_store(struct device *dev, struct device_attribute 
     struct switch_dev *sdev = (struct switch_dev *)dev_get_drvdata(dev);
     struct dock_switch_device *ds = container_of(sdev, struct dock_switch_device, sdev);
 
-    gpio_set_value(ds->rs485en_vgpio_num,(*buf-'0')); 
+    pr_err("rs485en store %d", (*buf-'0'));
+
+    gpio_set_value(ds->mcu_outs_pins[RS48_GPIO_OFFSET],(*buf-'0')); 
 
     return (count);
 }
@@ -771,8 +773,8 @@ static ssize_t j1708_en_state_show(struct device *dev, struct device_attribute *
 {
     struct switch_dev *sdev = (struct switch_dev *)dev_get_drvdata(dev);
     struct dock_switch_device *ds = container_of(sdev, struct dock_switch_device, sdev);
-
-    return gpio_get_value(ds->j1708en_vgpio_num);
+ 
+    return gpio_get_value(ds->mcu_outs_pins[J1708_GPIO_OFFSET]);
 }
 
 static ssize_t j1708_en_state_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
@@ -780,7 +782,9 @@ static ssize_t j1708_en_state_store(struct device *dev, struct device_attribute 
     struct switch_dev *sdev = (struct switch_dev *)dev_get_drvdata(dev);
     struct dock_switch_device *ds = container_of(sdev, struct dock_switch_device, sdev);
 
-    gpio_set_value(ds->j1708en_vgpio_num,(*buf-'0')); 
+    pr_err("j1708 store %d", (*buf-'0'));
+
+    gpio_set_value_cansleep(ds->mcu_outs_pins[J1708_GPIO_OFFSET],(*buf-'0')); 
 
     return (count);
 }
