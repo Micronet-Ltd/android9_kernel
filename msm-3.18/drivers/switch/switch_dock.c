@@ -751,144 +751,38 @@ static ssize_t dock_switch_outs_mask_clr_store(struct device *dev, struct device
 ///////////////////////////////////////barak/////////////////////////////////////////////////
 static ssize_t rs485_en_state_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
-    char gp_file[64];
-    mm_segment_t prev_fs;
-    int fd = 0;
-    int err = 0;
-
     struct switch_dev *sdev = (struct switch_dev *)dev_get_drvdata(dev);
     struct dock_switch_device *ds = container_of(sdev, struct dock_switch_device, sdev);
 
-    prev_fs = get_fs();
-	set_fs(get_ds());
-
-    //pr_err("rs485en : /sys/class/gpio/gpio%d/value", ds->rs485en_vgpio_num);
-
-    sprintf(gp_file, "/sys/class/gpio/gpio%d/value", ds->rs485en_vgpio_num);
-    fd = sys_open(gp_file, O_RDWR, S_IRUSR|S_IRGRP);
-
-    if(fd)
-    {
-        err = sys_read(fd, gp_file, 8); 
-        sys_close(fd);
-        
-        if(8 != err)
-        {
-            pr_err("error! couldn't connect to mcu on gpio %u ", ds->rs485en_vgpio_num);
-        }
-    }
-
-    set_fs(prev_fs);
-
-    //pr_err("return value %d,%c",gp_file[0],gp_file[0]);
-
-    return sprintf(buf,"%d\n", gp_file[0] - '0');
+    return gpio_get_value(ds->rs485en_vgpio_num);
 }
 
 static ssize_t rs485_en_state_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
-    int err = ENOENT; 
-    char gp_file[64];
-    int fd = 0;
-    mm_segment_t prev_fs;
-
     struct switch_dev *sdev = (struct switch_dev *)dev_get_drvdata(dev);
     struct dock_switch_device *ds = container_of(sdev, struct dock_switch_device, sdev);
 
-    prev_fs = get_fs();
-	set_fs(get_ds());
+    gpio_set_value(ds->rs485en_vgpio_num,(*buf-'0')); 
 
-    //pr_err("rs485en : /sys/class/gpio/gpio%d/value", ds->rs485en_vgpio_num);
- 
-    sprintf(gp_file, "/sys/class/gpio/gpio%d/value", ds->rs485en_vgpio_num);
-    fd = sys_open(gp_file, O_RDWR, S_IRUSR|S_IRGRP);
-
-    if(fd)
-    {
-
-        err = sys_write(fd, buf, 1); 
-        sys_close(fd);
-        
-        if(-1 == err)
-        {
-            pr_err("failureb write to vgpio controller %d",err);
-        }
-    }
-
-    set_fs(prev_fs);
-
-    return (err);
+    return (count);
 }
 
 static ssize_t j1708_en_state_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
-    char gp_file[64] ;
-    mm_segment_t prev_fs;
-    int fd = 0;
-    int err = 0;
-
     struct switch_dev *sdev = (struct switch_dev *)dev_get_drvdata(dev);
     struct dock_switch_device *ds = container_of(sdev, struct dock_switch_device, sdev);
 
-    prev_fs = get_fs();
-	set_fs(get_ds());
-
-    //pr_err("j1708en : /sys/class/gpio/gpio%d/value", ds->j1708en_vgpio_num);
-
-    sprintf(gp_file, "/sys/class/gpio/gpio%d/value", ds->j1708en_vgpio_num);
-    fd = sys_open(gp_file, O_RDWR, S_IRUSR|S_IRGRP);
-
-    if(fd)
-    {
-        err = sys_read(fd, gp_file, 8); 
-        sys_close(fd);
-        
-        if(8 != err)
-        {
-            pr_err("error! couldn't connect to mcu on gpio %u err = %u",ds->j1708en_vgpio_num,err);
-        }
-    }
-
-    //pr_err("j1708en value : %d, %c ",  gp_file[0],  gp_file[0]);
-
-    set_fs(prev_fs);
-
-    return sprintf(buf,"%d\n", gp_file[0] - '0');
+    return gpio_get_value(ds->j1708en_vgpio_num);
 }
 
 static ssize_t j1708_en_state_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
-    int err = ENOENT; 
-    char gp_file[64];
-    int fd = 0;
-    mm_segment_t prev_fs;
-
     struct switch_dev *sdev = (struct switch_dev *)dev_get_drvdata(dev);
     struct dock_switch_device *ds = container_of(sdev, struct dock_switch_device, sdev);
 
-    pr_notice("%s: %d <-- %c", __func__, ds->j1708en_vgpio_num, buf[0]);
- 
-    sprintf(gp_file, "/sys/class/gpio/gpio%d/value", ds->j1708en_vgpio_num);
+    gpio_set_value(ds->j1708en_vgpio_num,(*buf-'0')); 
 
-    prev_fs = get_fs();
-    set_fs(get_ds());
-
-    fd = sys_open(gp_file, O_RDWR, S_IRUSR|S_IRGRP);
-
-    if(fd)
-    {
-        err = sys_write(fd, buf, 1); 
-        sys_close(fd);
-        
-        if(-1 == err)
-        {
-            pr_err("error! couldn't connect to mcu %d",err);
-        }
-    }
-
-    set_fs(prev_fs);
-
-    return (err);
+    return (count);
 }
 ///////////////////////////////////////////////////////////////////////////////////////
 

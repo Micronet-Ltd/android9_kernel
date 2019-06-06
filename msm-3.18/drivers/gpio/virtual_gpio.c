@@ -86,13 +86,13 @@ struct mcu_bank
 #else
 	struct mutex lock;
 #endif
+    op_info_t gpio_info;
 
-	uint32_t mcu_gpio_value[5];
-	uint32_t mcu_gpio_mask[5];
-	uint32_t mcu_gpio_dir[5];
+	unsigned long mcu_gpio_value[5];
+	unsigned long mcu_gpio_mask[5];
+	unsigned long mcu_gpio_dir[5];
 
-	op_info_t gpio_info;
-	bool returned_gpio_val;
+	int returned_gpio_val;
 	volatile mcu_response_t returned_flag; 
 
 };
@@ -260,7 +260,7 @@ static ssize_t set_in(struct device *dev, struct device_attribute *attr, const c
 
 	return count;
 }
-static DEVICE_ATTR(dbg_inputs, S_IRUGO | S_IWUSR, show_in, set_in);
+static DEVICE_ATTR(dbg_inputs, S_IWGRP|S_IWUSR|S_IRUSR|S_IRGRP, show_in, set_in);
 
 static struct attribute *in_attributes[] = {
 	&dev_attr_dbg_inputs.attr,
@@ -619,10 +619,9 @@ static int virt_gpio_mcu_get(struct gpio_chip *chip, unsigned offset)
 		wait_event_interruptible_exclusive(dev->mcu_gpio_bank.mcu_wq, REQUEST_SENT != dev->mcu_gpio_bank.returned_flag);
 		//pr_err("%s() after wait %d \n", __func__, dev->mcu_gpio_bank.returned_flag);
 		
-		if(NO_REQUEST != dev->mcu_gpio_bank.returned_flag)
-		{
+		if (NO_REQUEST != dev->mcu_gpio_bank.returned_flag) {
 			dev->mcu_gpio_bank.returned_flag = NO_REQUEST;
-			return -1;
+			return -EBUSY;
 		}
 
 		LOCK_BANK(dev->mcu_gpio_bank.lock, flags);
@@ -631,11 +630,11 @@ static int virt_gpio_mcu_get(struct gpio_chip *chip, unsigned offset)
 		:
 		CLEAR_BIT32(dev->mcu_gpio_bank.mcu_gpio_value[port], bit_index);
 	}
-	ret = TEST_BIT32(dev->mcu_gpio_bank.mcu_gpio_value[port], bit_index);
+	ret = test_bit(bit_index, &dev->mcu_gpio_bank.mcu_gpio_value[port]);
 
 	UNLOCK_BANK(dev->mcu_gpio_bank.lock, flags);
 
-	return (!!ret);
+	return (ret)?1:0;
 }
 
 static int virt_gpio_in_get(struct gpio_chip *chip, unsigned offset)
