@@ -16,7 +16,7 @@ qcom,c801_fullymax_fb382030xl_4v2_135mah_20k {
 	qcom,fastchg-current-ma = <300>;
 	qcom,fg-cc-cv-threshold-mv = <4190>;
 	qcom,nom-batt-capacity-mah = <135>;
-	qcom,batt-id-kohm = <16>;
+	qcom,batt-id-kohm = <20>;
 	qcom,battery-beta = <3440>;
 	qcom,battery-type = "c801_fullymax_fb382030xl_4v2_135mah_20k";
 	qcom,chg-rslow-comp-c1 = <2861349>;
