@@ -2233,8 +2233,9 @@ static int get_monotonic_soc_raw(struct fg_chip *chip)
 		return -EINVAL;
 	}
 
-	if (fg_debug_mask & FG_POWER_SUPPLY)
+	if (fg_debug_mask & FG_AGING)
 		pr_info_ratelimited("raw: 0x%02x\n", cap[0]);
+
 	return cap[0];
 }
 
@@ -2342,7 +2343,7 @@ static int get_sram_prop_now(struct fg_chip *chip, unsigned int type)
 static int get_prop_jeita_temp(struct fg_chip *chip, unsigned int type)
 {
 	if (fg_debug_mask & FG_POWER_SUPPLY)
-		pr_info("addr 0x%02X, offset %d\n", settings[type].address,
+		pr_debug("addr 0x%02X, offset %d\n", settings[type].address,
 			settings[type].offset);
 
 	return settings[type].value;
@@ -2354,7 +2355,7 @@ static int set_prop_jeita_temp(struct fg_chip *chip,
 	int rc = 0;
 
 	if (fg_debug_mask & FG_POWER_SUPPLY)
-		pr_info("addr 0x%02X, offset %d temp%d\n",
+		pr_debug("addr 0x%02X, offset %d temp%d\n",
 			settings[type].address,
 			settings[type].offset, decidegc);
 
@@ -3130,7 +3131,7 @@ static void slope_limiter_work(struct work_struct *work)
 
 	chip->slope_limit_sts = status;
 	if (fg_debug_mask & FG_STATUS)
-		pr_info("Slope limit sts: %d val: %lld buf[%x %x] written\n",
+		pr_notice("Slope limit sts: %d val: %lld buf[%x %x] written\n",
 			status, val, buf[0], buf[1]);
 out:
 	fg_relax(&chip->slope_limit_wakeup_source);
