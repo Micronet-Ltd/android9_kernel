@@ -313,6 +313,10 @@ static void dock_switch_work_func(struct work_struct *work)
     if (!ds->usb_psy) {
         pr_notice("usb power supply not ready %lld\n", ktime_to_ms(ktime_get()));
         ds->usb_psy = power_supply_get_by_name("usb");
+        msleep(200);
+        schedule_work(&ds->work);
+
+        return;
     }
 
     if (e_dock_type_basic != ds->dock_type) {
@@ -359,7 +363,7 @@ static void dock_switch_work_func(struct work_struct *work)
 					//gpio_direction_input(ds->dock_pin);
 					// switch otg connector
 					if (gpio_is_valid(ds->usb_switch_pin)) {
-						pr_notice("switch usb connector %lld\n", ktime_to_ms(ktime_get()));
+						pr_notice("switch usb %s connector %lld\n", (e_dock_type_unspecified == ds->dock_type)?"type-c":"44-pin", ktime_to_ms(ktime_get()));
 						gpio_set_value(ds->usb_switch_pin, !!(ds->usb_switch_l == (e_dock_type_unspecified != ds->dock_type)));
 					}
                     if (gpio_is_valid(ds->otg_en_pin)) {
@@ -432,12 +436,25 @@ static void dock_switch_work_func(struct work_struct *work)
     if (e_dock_type_basic == ds->dock_type) {
         if (gpio_is_valid(ds->ign_pin)) {
             if (ds->ign_active_l != gpio_get_value(ds->ign_pin)) {
+                prop.intval = 0x20;
+                power_supply_set_usb_otg(ds->usb_psy, prop.intval);
+                power_supply_set_current_limit(ds->usb_psy, 1500*1000);
                 pr_notice("basic cradle plagged %lld\n", ktime_to_ms(ktime_get()));
                 val |= SWITCH_DOCK;
             } else {
                 pr_notice("basic cradle unplagged %lld\n", ktime_to_ms(ktime_get()));
+                prop.intval = 0x0;
+                power_supply_set_usb_otg(ds->usb_psy, prop.intval);
                 ds->dock_type = e_dock_type_unspecified;
+                // switch otg connector
+                if (gpio_is_valid(ds->usb_switch_pin)) {
+                    pr_notice("switch usb type-c connector %lld\n", ktime_to_ms(ktime_get()));
+                    gpio_set_value(ds->usb_switch_pin, !ds->usb_switch_l);
+                }
             }
+//        prop.intval = POWER_SUPPLY_TYPE_USB_ACA;
+//        prop.intval = POWER_SUPPLY_TYPE_UNKNOWN;
+//        ds->usb_psy->set_property(ds->usb_psy, POWER_SUPPLY_PROP_REAL_TYPE, &prop);
         }
 
         if (gpio_is_valid(ds->dock_pin)) {
