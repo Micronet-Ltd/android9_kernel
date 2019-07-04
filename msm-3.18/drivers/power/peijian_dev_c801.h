@@ -43,12 +43,10 @@ struct peijian_data {
 	int peijian_pogo_irq;
 	int peijian_pogo_pin4;
 	int peijian_pogo_pin8;
-	int peijian_pogo_pin12;
 	int peijian_pogo_pin13;
 	int peijian_pogo_pin21;
 	int peijian_pogo_pin22;
 	int peijian_pogo_pin24;
-	int peijian_pogo_pin25;
 	int peijian_pogo_pin26;
 	struct notifier_block peijian_notifier;
 	struct input_dev *input_dev;

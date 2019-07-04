@@ -54,24 +54,20 @@ static ssize_t pogo_gpio_store(struct device *pdev, struct device_attribute *att
 		printk("+++ peijian pogo_gpio1 to 1 +++\n");
 		gpio_direction_output(pdata->peijian_pogo_pin4, 1);
 		gpio_direction_output(pdata->peijian_pogo_pin8, 1);
-		gpio_direction_output(pdata->peijian_pogo_pin12, 1);
 		gpio_direction_output(pdata->peijian_pogo_pin13, 1);
 		gpio_direction_output(pdata->peijian_pogo_pin21, 1);
 		gpio_direction_output(pdata->peijian_pogo_pin22, 1);
 		gpio_direction_output(pdata->peijian_pogo_pin24, 1);
-		gpio_direction_output(pdata->peijian_pogo_pin25, 1);
 		gpio_direction_output(pdata->peijian_pogo_pin26, 1);
 	}
 	else{
 		printk("+++ peijian pogo_gpio1 to 0 +++\n");
 		gpio_direction_output(pdata->peijian_pogo_pin4, 0);
 		gpio_direction_output(pdata->peijian_pogo_pin8, 0);
-		gpio_direction_output(pdata->peijian_pogo_pin12, 0);
 		gpio_direction_output(pdata->peijian_pogo_pin13, 0);
 		gpio_direction_output(pdata->peijian_pogo_pin21, 0);
 		gpio_direction_output(pdata->peijian_pogo_pin22, 0);
 		gpio_direction_output(pdata->peijian_pogo_pin24, 0);
-		gpio_direction_output(pdata->peijian_pogo_pin25, 0);
 		gpio_direction_output(pdata->peijian_pogo_pin26, 0);
 	}
 
@@ -133,11 +129,6 @@ static void init_peijian_dev_gpio(struct peijian_data *pdata)
 		pr_err("PEIJIAN DEV config: request  gpio[%d] Failed!\n", pdata->peijian_pogo_pin8);
 		return;
 	}
-	rc = gpio_request(pdata->peijian_pogo_pin12, "peijian_pogo_pin12");
-	if (rc < 0) {
-		pr_err("PEIJIAN DEV config: request  gpio[%d] Failed!\n", pdata->peijian_pogo_pin12);
-		return;
-	}
 	rc = gpio_request(pdata->peijian_pogo_pin13, "peijian_pogo_pin13");
 	if (rc < 0) {
 		pr_err("PEIJIAN DEV config: request  gpio[%d] Failed!\n", pdata->peijian_pogo_pin13);
@@ -158,11 +149,6 @@ static void init_peijian_dev_gpio(struct peijian_data *pdata)
 		pr_err("PEIJIAN DEV config: request  gpio[%d] Failed!\n", pdata->peijian_pogo_pin24);
 		return;
 	}
-	rc = gpio_request(pdata->peijian_pogo_pin25, "peijian_pogo_pin25");
-	if (rc < 0) {
-		pr_err("PEIJIAN DEV config: request  gpio[%d] Failed!\n", pdata->peijian_pogo_pin25);
-		return;
-	}
 	rc = gpio_request(pdata->peijian_pogo_pin26, "peijian_pogo_pin26");
 	if (rc < 0) {
 		pr_err("PEIJIAN DEV config: request  gpio[%d] Failed!\n", pdata->peijian_pogo_pin26);
@@ -172,12 +158,10 @@ static void init_peijian_dev_gpio(struct peijian_data *pdata)
 	gpio_direction_output(pdata->peijian_pogo_irq, 1);
 	gpio_direction_output(pdata->peijian_pogo_pin4, 0);
 	gpio_direction_output(pdata->peijian_pogo_pin8, 0);
-	gpio_direction_output(pdata->peijian_pogo_pin12, 0);
 	gpio_direction_output(pdata->peijian_pogo_pin13, 0);
 	gpio_direction_output(pdata->peijian_pogo_pin21, 0);
 	gpio_direction_output(pdata->peijian_pogo_pin22, 0);
 	gpio_direction_output(pdata->peijian_pogo_pin24, 0);
-	gpio_direction_output(pdata->peijian_pogo_pin25, 0);
 	gpio_direction_output(pdata->peijian_pogo_pin26, 0);
 	
 
@@ -200,11 +184,7 @@ static int peijian_dev_parse_dt(struct device *dev, struct peijian_data *pdata)
 	pdata->peijian_pogo_pin8= of_get_named_gpio(np, "peijian_pogo_pin8", 0);
 	if (!gpio_is_valid(pdata->peijian_pogo_pin8))
 		pr_err("%s:%d, peijian_pogo_pin8 gpio not specified\n", __func__, __LINE__);
-	
-	pdata->peijian_pogo_pin12= of_get_named_gpio(np, "peijian_pogo_pin12", 0);
-	if (!gpio_is_valid(pdata->peijian_pogo_pin12))
-		pr_err("%s:%d, peijian_pogo_pin12 gpio not specified\n", __func__, __LINE__);
-	
+
 	pdata->peijian_pogo_pin13= of_get_named_gpio(np, "peijian_pogo_pin13", 0);
 	if (!gpio_is_valid(pdata->peijian_pogo_pin13))
 		pr_err("%s:%d, peijian_pogo_pin13 gpio not specified\n", __func__, __LINE__);
@@ -220,10 +200,6 @@ static int peijian_dev_parse_dt(struct device *dev, struct peijian_data *pdata)
 	pdata->peijian_pogo_pin24= of_get_named_gpio(np, "peijian_pogo_pin24", 0);
 	if (!gpio_is_valid(pdata->peijian_pogo_pin24))
 		pr_err("%s:%d, peijian_pogo_pin24 gpio not specified\n", __func__, __LINE__);
-	
-	pdata->peijian_pogo_pin25= of_get_named_gpio(np, "peijian_pogo_pin25", 0);
-	if (!gpio_is_valid(pdata->peijian_pogo_pin25))
-		pr_err("%s:%d, peijian_pogo_pin25 gpio not specified\n", __func__, __LINE__);
 	
 	pdata->peijian_pogo_pin26= of_get_named_gpio(np, "peijian_pogo_pin26", 0);
 	if (!gpio_is_valid(pdata->peijian_pogo_pin26))
