@@ -323,7 +323,6 @@ static unsigned int vgpio_dev_poll(struct file *file, poll_table *wait)
 	{
 		should_connect += dev->mcu_gpio_bank.mcu_gpio_mask[i];
 	}
-	UNLOCK_BANK(dev->mcu_gpio_bank.lock, flags);
 
 	if (dev->gpo_bank.gpio_mask || should_connect)
 	{
@@ -568,10 +567,12 @@ static void virt_gpio_mcu_set(struct gpio_chip *chip, unsigned offset, int value
 	struct virt_gpio *dev = g_pvpgio;
 	int port, bit_index;
 
-	port = offset / 32;		 /*power of two so the compiler will turn this to a shift*/
-	bit_index = offset % 32; /*power of two so the compiler will do this with a mask*/
+	port = (offset >> 5);		 
+	bit_index = (offset & 31u); 
 
 	DEFINE_LOCK_FLAGS(flags); // make last
+
+//	pr_err("%s() bit_index %u, port %u offset %u \n", __func__, bit_index, port, offset);
 
 	LOCK_BANK(dev->mcu_gpio_bank.lock, flags);
 
@@ -631,7 +632,7 @@ static int virt_gpio_mcu_get(struct gpio_chip *chip, unsigned offset)
 		CLEAR_BIT32(dev->mcu_gpio_bank.mcu_gpio_value[port], bit_index);
 	}
 	ret = test_bit(bit_index, &dev->mcu_gpio_bank.mcu_gpio_value[port]);
-
+	
 	UNLOCK_BANK(dev->mcu_gpio_bank.lock, flags);
 
 	return (ret)?1:0;
