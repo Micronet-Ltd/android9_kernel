@@ -18,6 +18,7 @@
 #include <linux/of_gpio.h>
 #include <linux/interrupt.h>
 #include <linux/irq.h>
+#include <linux/delay.h>
 #include <linux/workqueue.h>
 #include <linux/wakelock.h>
 
@@ -283,7 +284,7 @@ static int wait_for_stable_signal(int pin, int interim)
 
 static inline int pulses2freq(int pulses, int interim)
 {
-    pr_notice("%d HZ %lld\n", 1000 * pulses / interim, ktime_to_ms(ktime_get()));
+//    pr_notice("%d HZ %lld\n", 1000 * pulses / interim, ktime_to_ms(ktime_get()));
     return 1000 * pulses / interim;
 }
 
@@ -322,6 +323,7 @@ static void dock_switch_work_func(struct work_struct *work)
     if (e_dock_type_basic != ds->dock_type) {
         val = wait_for_stable_signal(ds->ign_pin, DEBOUNCE_INTERIM + PATERN_INTERIM);
         val = pulses2freq(val, PATERN_INTERIM);
+        pr_notice("%d HZ %lld\n", val, ktime_to_ms(ktime_get()));
         val = freq2pattern(val);
         pr_notice("pattern[%d, %d] [%lld]%lld\n", val, gpio_get_value(ds->ign_pin), timer, ktime_to_ms(ktime_get()));
        	if (BASIC_PATTERN == val) {
@@ -335,7 +337,7 @@ static void dock_switch_work_func(struct work_struct *work)
                         power_supply_set_usb_otg(ds->usb_psy, prop.intval);
 					}
 					ds->dock_type = e_dock_type_unspecified;
-					ds->sched_irq |= SWITCH_DOCK;
+					ds->sched_irq |= SWITCH_IGN;
 					act = 1;
 				} else if (e_dock_type_smart != ds->dock_type) {
                     pr_notice("probably basic cradle plugging or smart cradle lost power %lld \n", ktime_to_ms(ktime_get())); 
@@ -407,7 +409,7 @@ static void dock_switch_work_func(struct work_struct *work)
                 	disable_irq_nosync(ds->dock_irq);
                     pr_notice("disable dock irq[%d] %lld\n", ds->dock_irq, ktime_to_ms(ktime_get()));
                 }
-                ds->sched_irq &= ~SWITCH_DOCK;
+                ds->sched_irq &= ~SWITCH_IGN;
             }
 
             if (gpio_is_valid(ds->dock_pin)) {
@@ -467,19 +469,19 @@ static void dock_switch_work_func(struct work_struct *work)
     // interrupts handled
     if (ds->sched_irq & SWITCH_IGN) {
 //        pr_notice("enable dock monitor irq[%d]\n", ds->dock_irq);
-    	desc = irq_to_desc(ds->dock_irq);
+        desc = irq_to_desc(ds->dock_irq);
     	if(desc->depth > 0) {
     		ds->sched_irq &= ~SWITCH_IGN;
-    		enable_irq(ds->dock_irq);
+            enable_irq(ds->dock_irq);
     	}
     }
 
     if (ds->sched_irq & SWITCH_DOCK) {
 //        pr_notice("enable ignition monitor irq[%d]\n", ds->ign_irq);
-    	desc = irq_to_desc(ds->ign_irq);
+        desc = irq_to_desc(ds->ign_irq);
     	if(desc->depth > 0) {
         	ds->sched_irq &= ~SWITCH_DOCK;
-        	enable_irq(ds->ign_irq);
+            enable_irq(ds->ign_irq);
         }
     }
 
@@ -542,16 +544,16 @@ static irqreturn_t dock_switch_irq_handler(int irq, void *arg)
 // the pins IGN and CRADLE_DETECT ara swapped in hardware
 //
 
-    pr_notice("irq[%d]\n", irq);
+//    pr_notice("irq[%d]\n", irq);
     disable_irq_nosync(irq);
 
     if (irq == ds->dock_irq) {
-        pr_notice("ign state [%d]\n", gpio_get_value(ds->dock_pin));
+//        pr_notice("ign/dock state [%d]\n", gpio_get_value(ds->dock_pin));
         ds->sched_irq |= SWITCH_IGN;
     }
 
     if (irq == ds->ign_irq) {
-        pr_notice("dock state [%d]\n", gpio_get_value(ds->ign_pin));
+//        pr_notice("dock/ign state [%d]\n", gpio_get_value(ds->ign_pin));
         ds->sched_irq |= SWITCH_DOCK;
     }
 
