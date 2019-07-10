@@ -584,7 +584,7 @@
 			};
 
 			config {
-				pins = "gpio16", "gpio17s";
+				pins = "gpio16", "gpio17";
 				drive-strength = <16>;
 				bias-disable;
 			};
@@ -592,13 +592,14 @@
 
 		blsp2_uart0_short_sleep: blsp2_uart0_short_sleep {
 			mux {
-				pins = "gpio17", "gpio16";
+				pins = "gpio16", "gpio17";
 				function = "gpio";
 			};
 
 			config {
-				pins = "gpio17", "gpio16";
+				pins = "gpio16", "gpio17";
 				drive-strength = <2>;
+				bias-disable;
 			};
 		};
 		
