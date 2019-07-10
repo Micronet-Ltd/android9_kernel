@@ -672,7 +672,7 @@
 				1 &intc 0 239 0
 				2 &tlmm 17 0>;
 
-		qcom,inject-rx-on-wakeup;
+		/*qcom,inject-rx-on-wakeup;*/
 		qcom,rx-char-to-inject = <0xFD>;
 		qcom,master-id = <84>;
 		clock-names = "core_clk", "iface_clk";
