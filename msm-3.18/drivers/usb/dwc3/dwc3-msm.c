@@ -2557,27 +2557,38 @@ static int dwc3_msm_power_set_property_usb(struct power_supply *psy,
 
 	switch (psp) {
     case POWER_SUPPLY_PROP_USB_OTG:
-        mdwc->cradle_state = (val->intval & 0x10)?1:0;
-		id = (val->intval & (~0x10)) ? DWC3_ID_GROUND : DWC3_ID_FLOAT;
-        dev_notice(mdwc->dev, "POWER_SUPPLY_PROP_USB_OTG :%d-->%d\n", mdwc->id_state, id);
-		if (mdwc->id_state == id)
-			break;
+        if (val->intval & 0x20) {
+            // Vladimir
+            // basic cradle plugged but but power might be supplied soon
+            //
+            mdwc->cradle_state = 1;
+        } else {
+            // Vladimir
+            // enhance cradle plug/unplug indication
+            // enable host mode, Vbus shouldn't be supplied to cradle
+            //
+            mdwc->cradle_state = (val->intval & 0x10) ? 1 : 0; 
+            id = (val->intval & (~0x10)) ? DWC3_ID_GROUND : DWC3_ID_FLOAT;
+            dev_notice(mdwc->dev, "POWER_SUPPLY_PROP_USB_OTG :%d-->%d\n", mdwc->id_state, id);
+            if (mdwc->id_state == id)
+                break;
 
-		if (disable_host_mode && !id) {
-			dev_dbg(mdwc->dev, "%s: Ignoring ID change event :%d\n",
-						__func__, mdwc->id_state);
-			break;
-		}
+            if (disable_host_mode && !id) {
+                dev_dbg(mdwc->dev, "%s: Ignoring ID change event :%d\n",
+                            __func__, mdwc->id_state);
+                break;
+            }
 
-		/* Let OTG know about ID detection */
-		mdwc->id_state = id;
-		dbg_event(0xFF, "id_state", mdwc->id_state);
-		if (dwc->is_drd) {
-			dbg_event(0xFF, "stayID", 0);
-			pm_stay_awake(mdwc->dev);
-			queue_delayed_work(mdwc->dwc3_resume_wq,
-					&mdwc->resume_work, 0);
-		}
+            /* Let OTG know about ID detection */
+            mdwc->id_state = id;
+            dbg_event(0xFF, "id_state", mdwc->id_state);
+            if (dwc->is_drd) {
+                dbg_event(0xFF, "stayID", 0);
+                pm_stay_awake(mdwc->dev);
+                queue_delayed_work(mdwc->dwc3_resume_wq,
+                        &mdwc->resume_work, 0);
+            }
+        }
 		break;
 	/* PMIC notification for DP_DM state */
 	case POWER_SUPPLY_PROP_DP_DM:
@@ -2655,8 +2666,9 @@ static int dwc3_msm_power_set_property_usb(struct power_supply *psy,
 			psy->type = POWER_SUPPLY_TYPE_USB;
 		else
 			psy->type = mdwc->usb_supply_type;
+
 		switch (mdwc->usb_supply_type) {
-		case POWER_SUPPLY_TYPE_USB:
+        case POWER_SUPPLY_TYPE_USB:
 			mdwc->chg_type = DWC3_SDP_CHARGER;
 			mdwc->voltage_max = MICRO_5V;
 			break;
@@ -3888,15 +3900,15 @@ static void dwc3_check_float_lines(struct dwc3_msm *mdwc)
 
 	/* Get linestate with Idp_src enabled */
 	dpdm = usb_phy_dpdm_with_idp_src(mdwc->hs_phy);
-	if (dpdm == 0x2) {
+	if (dpdm == 0x2 || dpdm == 0x3) {
 		/* DP is HIGH = lines are floating */
 		mdwc->chg_type = DWC3_PROPRIETARY_CHARGER;
 		mdwc->otg_state = OTG_STATE_B_IDLE;
 		pm_runtime_put_sync(mdwc->dev);
-		dbg_event(0xFF, "FLT psync",
-				atomic_read(&mdwc->dev->power.usage_count));
+		dbg_event(0xFF, "FLT psync", atomic_read(&mdwc->dev->power.usage_count));
+        dev_notice(mdwc->dev, "%s:DP is high, associates as float pins:%x\n", __func__, dpdm);
 	} else if (dpdm) {
-		dev_dbg(mdwc->dev, "%s:invalid linestate:%x\n", __func__, dpdm);
+		dev_notice(mdwc->dev, "%s:invalid pins' state:%x\n", __func__, dpdm);
 	}
 }
 
@@ -4065,13 +4077,19 @@ static void dwc3_msm_otg_sm_work(struct work_struct *w)
 			dbg_event(0xFF, "b_sess_vld", 0);
 			switch (mdwc->chg_type) {
 			case DWC3_DCP_CHARGER:
-			case DWC3_PROPRIETARY_CHARGER:
+            case DWC3_PROPRIETARY_CHARGER: {
+                int curr;
 				dbg_event(0xFF, "DCPCharger", 0);
-				dwc3_msm_gadget_vbus_draw(mdwc,
-						dcp_max_current);
+                if (mdwc->cradle_state) {
+                    curr = DWC3_HVDCP_CHG_MAX;
+                } else {
+                    curr = dcp_max_current;
+                }
+                dwc3_msm_gadget_vbus_draw(mdwc, curr);
 				dbg_event(0xFF, "RelDCPBIDLE", 0);
 				pm_relax(mdwc->dev);
 				break;
+            }
 			case DWC3_CDP_CHARGER:
 				dbg_event(0xFF, "CDPCharger", 0);
 				dwc3_msm_gadget_vbus_draw(mdwc,
@@ -4079,6 +4097,7 @@ static void dwc3_msm_otg_sm_work(struct work_struct *w)
 				/* fall through */
 			case DWC3_SDP_CHARGER:
 				dbg_event(0xFF, "SDPCharger", 0);
+                dev_notice(mdwc->dev, "b_sess_vld, try DWC3_SDP_CHARGER\n");
 				/*
 				 * Increment pm usage count upon cable
 				 * connect. Count is decremented in
@@ -4089,16 +4108,18 @@ static void dwc3_msm_otg_sm_work(struct work_struct *w)
 				dbg_event(0xFF, "CHG gsync",
 					atomic_read(
 						&mdwc->dev->power.usage_count));
+                work = 1;
 				/* check dp/dm for SDP & runtime_put if !SDP */
 				if (mdwc->detect_dpdm_floating &&
 				    mdwc->chg_type == DWC3_SDP_CHARGER) {
 					dwc3_check_float_lines(mdwc);
-					if (mdwc->chg_type != DWC3_SDP_CHARGER)
+					if (mdwc->chg_type != DWC3_SDP_CHARGER) {
+                        dev_notice(mdwc->dev, "DP/DM are float, replace charger by DWC3_PROPRIETARY_CHARGER\n");
 						break;
+                    }
 				}
 				dwc3_otg_start_peripheral(mdwc, 1);
 				mdwc->otg_state = OTG_STATE_B_PERIPHERAL;
-				work = 1;
 				break;
 			/* fall through */
 			default:
@@ -4107,7 +4128,7 @@ static void dwc3_msm_otg_sm_work(struct work_struct *w)
 		} else {
 			mdwc->typec_current_max = 0;
 			dwc3_msm_gadget_vbus_draw(mdwc, 0);
-			dev_dbg(mdwc->dev, "No device, allowing suspend\n");
+			dev_notice(mdwc->dev, "No device, allowing suspend\n");
 			dbg_event(0xFF, "RelNodev", 0);
 			pm_relax(mdwc->dev);
 		}

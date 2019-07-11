@@ -116,8 +116,7 @@ int32_t __ref connected_to_mcu_gpio_callback(struct notifier_block *nfb, unsigne
 }*/
 
 /////////////////////////////////////////////////////////////////
-struct vgpio_bank
-{
+struct vgpio_bank {
 	unsigned long gpio_mask;
 	unsigned long gpio_value;
 	wait_queue_head_t wq;
@@ -131,32 +130,15 @@ unsigned long g_gpio;
 
 #ifdef VGPIO_USE_SPINLOCK
 #define DEFINE_LOCK_FLAGS(x) int x
-#define LOCK_BANK(lock, flags)           \
-	do                                   \
-	{                                    \
-		spin_lock_irqsave(&lock, flags); \
-	} while (0)
-#define UNLOCK_BANK(lock, flags)              \
-	do                                        \
-	{                                         \
-		spin_unlock_irqrestore(&lock, flags); \
-	} while (0)
+#define LOCK_BANK(lock, flags) do { spin_lock_irqsave(&lock, flags); } while (0)
+#define UNLOCK_BANK(lock, flags) do { spin_unlock_irqrestore(&lock, flags); } while (0)
 #else
 #define DEFINE_LOCK_FLAGS(x) // NOOP
-#define LOCK_BANK(lock, flags) \
-	do                         \
-	{                          \
-		mutex_lock(&lock);     \
-	} while (0)
-#define UNLOCK_BANK(lock, flags) \
-	do                           \
-	{                            \
-		mutex_unlock(&lock);     \
-	} while (0)
+#define LOCK_BANK(lock, flags) do { mutex_lock(&lock); } while (0)
+#define UNLOCK_BANK(lock, flags) do { mutex_unlock(&lock); } while (0)
 #endif
 
-struct virt_gpio
-{
+struct virt_gpio {
 	struct gpio_chip gpiochip_out;
 	struct gpio_chip gpiochip_in;
 	struct gpio_chip gpiochip_mcu;
@@ -172,7 +154,7 @@ struct virt_gpio
 	unsigned long enabled_in;
 };
 
-struct virt_gpio *g_pvpgio;
+struct virt_gpio * g_pvpgio;
 
 /////
 static RAW_NOTIFIER_HEAD(gpio_in_chain);
@@ -180,24 +162,24 @@ static DEFINE_RAW_SPINLOCK(gpio_in_chain_lock);
 
 static void gpio_in_notify(unsigned long reason, void *arg)
 {
-	unsigned long flags;
+    unsigned long flags;
 
-	raw_spin_lock_irqsave(&gpio_in_chain_lock, flags);
-	raw_notifier_call_chain(&gpio_in_chain, reason, arg);
-	raw_spin_unlock_irqrestore(&gpio_in_chain_lock, flags);
+    raw_spin_lock_irqsave(&gpio_in_chain_lock, flags);
+    raw_notifier_call_chain(&gpio_in_chain, reason, arg);
+    raw_spin_unlock_irqrestore(&gpio_in_chain_lock, flags);
 }
 
 int32_t gpio_in_register_notifier(struct notifier_block *nb)
 {
-	unsigned long flags;
-	int32_t err;
+    unsigned long flags;
+    int32_t err;
 
-	raw_spin_lock_irqsave(&gpio_in_chain_lock, flags);
-	err = raw_notifier_chain_register(&gpio_in_chain, nb);
-	raw_spin_unlock_irqrestore(&gpio_in_chain_lock, flags);
-	pr_notice("%d\n", err);
+    raw_spin_lock_irqsave(&gpio_in_chain_lock, flags);
+    err = raw_notifier_chain_register(&gpio_in_chain, nb);
+    raw_spin_unlock_irqrestore(&gpio_in_chain_lock, flags);
+    pr_notice("%d\n", err);
 
-	return err;
+    return err;
 }
 EXPORT_SYMBOL(gpio_in_register_notifier);
 ///////debug access
@@ -205,12 +187,12 @@ static ssize_t show_in(struct device *dev, struct device_attribute *attr, char *
 {
 	int i, val = 0;
 
-	for (i = 0; i < g_pvpgio->gpiochip_in.ngpio; i++)
-	{
+	for(i = 0; i < g_pvpgio->gpiochip_in.ngpio; i++) {
 		val |= (test_bit(i, &g_pvpgio->gpi_values) << i);
 	}
 	return sprintf(buf, "%02X\n", val);
 }
+
 static ssize_t set_in(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
 	char str[8] = {0};
@@ -218,8 +200,7 @@ static ssize_t set_in(struct device *dev, struct device_attribute *attr, const c
 	unsigned long mask = 0, val = 0, changed_bits = 0;
 
 	pr_info("%s, count %d\n", __func__, (int)count);
-	if (5 != count)
-	{
+	if (5 != count) {
 		pr_err("error: format XXXX (XX - mask, XX - value)\n");
 		return count;
 	}
@@ -230,29 +211,22 @@ static ssize_t set_in(struct device *dev, struct device_attribute *attr, const c
 
 	pr_info("%s, mask 0x%X, val 0x%X\n", __func__, (unsigned int)mask, (unsigned int)val);
 
-	for (i = 0; i < g_pvpgio->gpiochip_in.ngpio; i++)
-	{
-		if (test_bit(i, &mask))
-		{
-			if (test_bit(i, &val) != test_bit(i, &g_pvpgio->gpi_values))
-			{
+	for(i = 0; i < g_pvpgio->gpiochip_in.ngpio; i++) {
+		if(test_bit(i, &mask)) {
+			if(test_bit(i, &val) != test_bit(i, &g_pvpgio->gpi_values)) {
 
-				if (test_bit(i, &val))
-				{
+				if(test_bit(i, &val)) {
 					pr_info("%s set   INPUT%d\n", __func__, i);
 					set_bit(i, &g_pvpgio->gpi_values);
-				}
-				else
-				{
+				} else {
 					pr_info("%s: clear INPUT%d\n", __func__, i);
 					clear_bit(i, &g_pvpgio->gpi_values);
 				}
-				changed_bits |= (i << i);
+				changed_bits |= (i<<i);
 			}
 		}
 	}
-	if (changed_bits)
-	{
+	if (changed_bits) {
 		g_gpio = changed_bits;
 		pr_notice("gpio_in_notify 0x%X\n", (unsigned int)g_gpio);
 		gpio_in_notify(1, &g_gpio);
@@ -260,24 +234,27 @@ static ssize_t set_in(struct device *dev, struct device_attribute *attr, const c
 
 	return count;
 }
+
 static DEVICE_ATTR(dbg_inputs, S_IWGRP|S_IWUSR|S_IRUSR|S_IRGRP, show_in, set_in);
 
 static struct attribute *in_attributes[] = {
 	&dev_attr_dbg_inputs.attr,
-	NULL};
+	NULL
+};
 
 static const struct attribute_group in_attr_group = {
-	.attrs = in_attributes};
+	.attrs = in_attributes
+};
 
 /////
 static int vgpio_dev_open(struct inode *inode, struct file *file)
 {
-	struct virt_gpio *dev;
+	struct virt_gpio * dev;
 	DEFINE_LOCK_FLAGS(flags);
 
 	dev = g_pvpgio;
 
-	if (test_and_set_bit(1, &dev->inuse))
+	if(test_and_set_bit(1, &dev->inuse))
 		return -EPERM;
 
 	//dev = container_of(inode->i_cdev, struct virt_gpio, cdev);
@@ -298,7 +275,7 @@ static int vgpio_dev_open(struct inode *inode, struct file *file)
 
 static int vgpio_dev_release(struct inode *inode, struct file *file)
 {
-	struct virt_gpio *dev = file->private_data;
+	struct virt_gpio * dev = file->private_data;
 
 	clear_bit(1, &dev->inuse);
 
@@ -306,35 +283,35 @@ static int vgpio_dev_release(struct inode *inode, struct file *file)
 }
 
 // TODO: Test
-static unsigned int vgpio_dev_poll(struct file *file, poll_table *wait)
+static unsigned int vgpio_dev_poll(struct file * file,  poll_table * wait)
 {
-	struct virt_gpio *dev = file->private_data;
+	struct virt_gpio * dev = file->private_data;
 	unsigned int mask = 0;
 	int i = 0;
 	uint64_t should_connect = 0;
 
 	DEFINE_LOCK_FLAGS(flags);
 
+	LOCK_BANK(dev->gpo_bank.lock, flags);
 	poll_wait(file, &dev->gpo_bank.wq, wait);
 
 	LOCK_BANK(dev->mcu_gpio_bank.lock, flags);
 	//check if the mask is 0
-	for (i = 0; i < NUMBER_OF_MCU_GROUPS; ++i)
-	{
+	for (i = 0; i < NUMBER_OF_MCU_GROUPS; ++i) {
 		should_connect += dev->mcu_gpio_bank.mcu_gpio_mask[i];
 	}
 
-	if (dev->gpo_bank.gpio_mask || should_connect)
-	{
+	if (dev->gpo_bank.gpio_mask || should_connect) {
 		mask |= POLLIN | POLLRDNORM;
 	}
+
+	UNLOCK_BANK(dev->mcu_gpio_bank.lock, flags);
 	UNLOCK_BANK(dev->gpo_bank.lock, flags);
 
 	return mask;
 }
 
-static ssize_t virt_gpio_chr_read(struct file *file, char __user *buf,
-								  size_t count, loff_t *ppos)
+static ssize_t virt_gpio_chr_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)
 {
 	struct virt_gpio *dev = file->private_data;
 	uint8_t output[6]; //maximal possible data size needed to transfer info
@@ -346,10 +323,9 @@ static ssize_t virt_gpio_chr_read(struct file *file, char __user *buf,
 	unsigned long out_values = 0;
 	uint32_t gpio_mask = 0;
 
-	//pr_err("%s() READ\n", __func__);
+	//pr_notice("%s() READ\n", __func__);
 
-	if (count < output_size)
-	{
+	if (count < output_size) {
 		pr_err("%s() count too small\n", __func__);
 		return -EINVAL;
 	}
@@ -357,18 +333,16 @@ static ssize_t virt_gpio_chr_read(struct file *file, char __user *buf,
 	//note that after this loop port holds the following index to the
 	//index of the first port that has a gpio that should be set/get
 	// and gpio_mask holds the bit map of this port
-	while (!gpio_mask && port < 5)
-	{	
+	while (!gpio_mask && port < 5) {	
 		gpio_mask = dev->mcu_gpio_bank.mcu_gpio_mask[port];
 		
 		++port;
 	}
 
 	--port;
-	//pr_err("GPIO MASK! %u %d",gpio_mask,port);
-	if (gpio_mask)
-	{
-		//pr_err("READ_OR_WRITE!");
+	//pr_notice("GPIO MASK! %u %d",gpio_mask,port);
+	if (gpio_mask) {
+		//pr_notice("READ_OR_WRITE!");
 
 		//clean the bit in the mask
 		dev->mcu_gpio_bank.mcu_gpio_mask[port] &= ~gpio_mask;
@@ -380,13 +354,12 @@ static ssize_t virt_gpio_chr_read(struct file *file, char __user *buf,
 		output_size = ((dev->mcu_gpio_bank.mcu_gpio_dir[port])&gpio_mask) == kGpioDigitalInput? 5/*read request size*/:
 																							6/*write request size*/;
 		//get the offset
-		while(1 != (gpio_mask&1))
-		{
+		while (1 != (gpio_mask&1)) {
 			gpio_mask>>=1;
 			++offset;
 		}
 
-		//pr_err("port offset value: %u %lu %u",port, offset,value);
+		//pr_notice("port offset value: %u %lu %u",port, offset,value);
 
 		//iodriver will set the first three parameters
 		output[0] = 0; 
@@ -395,13 +368,10 @@ static ssize_t virt_gpio_chr_read(struct file *file, char __user *buf,
 		output[3] = port;
 		output[4] = offset;
 		output[5] = value;
-	}
-	else
-	{
-		//pr_err("GPIO_INT_STATUS!");
+	} else {
+		//pr_notice("GPIO_INT_STATUS!");
 		LOCK_BANK(dev->gpo_bank.lock, flags);
-		while (!dev->gpo_bank.gpio_mask)
-		{
+		while (!dev->gpo_bank.gpio_mask) {
 			UNLOCK_BANK(dev->gpo_bank.lock, flags);
 			if ((file->f_flags & O_NONBLOCK))
 				return -EAGAIN;
@@ -415,17 +385,14 @@ static ssize_t virt_gpio_chr_read(struct file *file, char __user *buf,
 
 		UNLOCK_BANK(dev->gpo_bank.lock, flags);
 
-		if (out_mask)
-		{
-			output[0] = 0; //iodriver will set that
-			output[1] = 0;
-			output[2] = out_mask & 0xff;
-			output[3] = out_values & 0xff;
-		}
-		else
-		{
-			pr_debug("%s() return 0 no io change\n", __func__);
-		}
+    	if(out_mask) {
+            output[0] = 0; //iodriver will set that
+            output[1] = 0;
+            output[2] = out_mask & 0xff;
+            output[3] = out_values & 0xff;
+        } else {
+            pr_debug("%s() return 0 no io change\n", __func__);
+        }
 	}
 
 	if (copy_to_user(buf, output, output_size))
@@ -433,74 +400,61 @@ static ssize_t virt_gpio_chr_read(struct file *file, char __user *buf,
 	*ppos = 0;
 
 	pr_debug("%s() return %d\n", __func__, output_size);
+
 	return output_size;
 }
 
-static ssize_t virt_gpio_chr_write(struct file *file, const char __user *buf,
-								   size_t count, loff_t *ppos)
+static ssize_t virt_gpio_chr_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
 {
-	struct virt_gpio *dev = file->private_data;
+	struct virt_gpio * dev = file->private_data;
 	uint8_t msg[4];
 	int i;
 	uint8_t val = 0;
 
-	if (count != 4)
+	if(count != 4)
 		return -EINVAL;
 
-	pr_err("virt_gpio_chr_write!");
+//	pr_notice("virt_gpio_chr_write!");
 
-	if (copy_from_user(msg, buf, count))
+	if(copy_from_user(msg, buf, count))
 		return -EACCES;
 
-	if (msg[0] || msg[1])
-	{
+	if(msg[0] || msg[1]) {
 		pr_err("%s() unsupported command %x,%x\n", __func__, msg[0], msg[1]);
 		return -EINVAL;
 	}
 
-	pr_err("writing %02d %02d\n", msg[2], msg[3]);
+//	pr_notice("writing %02d %02d\n", msg[2], msg[3]);
 
 	//Now check whether a user thread is waiting for a response
-	if (REQUEST_SENT == dev->mcu_gpio_bank.returned_flag)
-	{
-		if(-1 == msg[2])
-		{
+	if (REQUEST_SENT == dev->mcu_gpio_bank.returned_flag) {
+		if (-1 == msg[2]) {
 			dev->mcu_gpio_bank.returned_flag = ERROR_SENDING;
-		}
-		else
-		{
+		} else {
 			dev->mcu_gpio_bank.returned_gpio_val = msg[2];
 			mb();
 			dev->mcu_gpio_bank.returned_flag = NO_REQUEST;	
 		}
 
 		wake_up_interruptible(&(dev->mcu_gpio_bank.mcu_wq));
-	}
-	else
-	{
-		// TODO: use macro
-		for (i = 0; i < dev->gpiochip_in.ngpio; i++)
-		{
-			if (msg[2] & (1 << i))
-			{
-				if (msg[3] & (1 << i))
-				{
+	} else {
+	// TODO: use macro
+		for (i = 0; i < dev->gpiochip_in.ngpio; i++) {
+			if (msg[2] & (1 << i)) {
+				if (msg[3] & (1 << i)) {
 					//				printk("%s set   INPUT%d\n", __func__, i);
 					set_bit(i, &dev->gpi_values);
-				}
-				else
-				{
+				} else {
 					//				printk("%s: clear INPUT%d\n", __func__, i);
 					clear_bit(i, &dev->gpi_values);
 				}
 				val |= (1 << i);
 			}
 		}
-		if (val)
-		{
-			pr_err("gpio_in_notify %d\n", val);
-			g_gpio = val;
-			gpio_in_notify(1, &g_gpio);
+		if (val) {
+    		pr_notice("gpio_in_notify %d\n", val);
+    	    g_gpio = val;
+    	    gpio_in_notify(1, &g_gpio);
 		}
 	}
 
@@ -511,7 +465,7 @@ static ssize_t virt_gpio_chr_write(struct file *file, const char __user *buf,
 
 static int virt_gpio_out_request(struct gpio_chip *chip, unsigned offset)
 {
-	struct virt_gpio *dev = g_pvpgio;
+	struct virt_gpio * dev = g_pvpgio;
 	pr_debug("%s() %d\n", __func__, offset);
 	set_bit(offset, &dev->enabled_out);
 
@@ -521,7 +475,7 @@ static int virt_gpio_out_request(struct gpio_chip *chip, unsigned offset)
 static int virt_gpio_mcu_request(struct gpio_chip *chip, unsigned offset)
 {
 	//struct virt_gpio * dev = g_pvpgio;
-	//pr_err("%s() %d\n", __func__, offset);
+	//pr_notice("%s() %d\n", __func__, offset);
 	//set_bit(offset&0x1F/*modulo 32*/, (unsigned long *)&dev->enabled_mcu[offset>>5/*dividing by 32*/]);
 
 	return 0;
@@ -529,8 +483,8 @@ static int virt_gpio_mcu_request(struct gpio_chip *chip, unsigned offset)
 
 static int virt_gpio_in_request(struct gpio_chip *chip, unsigned offset)
 {
-	struct virt_gpio *dev = g_pvpgio;
-	//	printk("%s: %d\n", __func__, offset);
+	struct virt_gpio * dev = g_pvpgio;
+//	printk("%s: %d\n", __func__, offset);
 	set_bit(offset, &dev->enabled_in);
 
 	return 0;
@@ -538,14 +492,14 @@ static int virt_gpio_in_request(struct gpio_chip *chip, unsigned offset)
 
 static void virt_gpio_out_free(struct gpio_chip *chip, unsigned offset)
 {
-	struct virt_gpio *dev = g_pvpgio;
+	struct virt_gpio * dev = g_pvpgio;
 	pr_debug("%s() %d\n", __func__, offset);
 	clear_bit(offset, &dev->enabled_out);
 }
 
 static void virt_gpio_in_free(struct gpio_chip *chip, unsigned offset)
 {
-	struct virt_gpio *dev = g_pvpgio;
+	struct virt_gpio * dev = g_pvpgio;
 	pr_debug("%s() %d\n", __func__, offset);
 	clear_bit(offset, &dev->enabled_in);
 }
@@ -553,7 +507,7 @@ static void virt_gpio_in_free(struct gpio_chip *chip, unsigned offset)
 static void virt_gpio_mcu_free(struct gpio_chip *chip, unsigned offset)
 {
 	//struct virt_gpio * dev = g_pvpgio;
-	//pr_err("%s() %d\n", __func__, offset);
+	//pr_notice("%s() %d\n", __func__, offset);
 	//clear_bit(offset&0x1F/*modulo 32*/, (unsigned long *)&dev->enabled_mcu[offset>>5/*dividing by 32*/]);
 }
 
@@ -572,14 +526,14 @@ static void virt_gpio_mcu_set(struct gpio_chip *chip, unsigned offset, int value
 
 	DEFINE_LOCK_FLAGS(flags); // make last
 
-//	pr_err("%s() bit_index %u, port %u offset %u \n", __func__, bit_index, port, offset);
+//	pr_notice("%s() bit_index %u, port %u offset %u \n", __func__, bit_index, port, offset);
 
 	LOCK_BANK(dev->mcu_gpio_bank.lock, flags);
 
 	//only in case this gpio is output
 	if (kGpioDigitalInput != TEST_BIT32(dev->mcu_gpio_bank.mcu_gpio_dir[port], bit_index))
 	{
-		//pr_err("setting bits at %s() offset %d value %d port %d bit_index %d \n", __func__, offset, value,port,bit_index);
+		//pr_notice("setting bits at %s() offset %d value %d port %d bit_index %d \n", __func__, offset, value,port,bit_index);
 		
 		if (value)
 			SET_BIT32(dev->mcu_gpio_bank.mcu_gpio_value[port], bit_index);
@@ -587,7 +541,7 @@ static void virt_gpio_mcu_set(struct gpio_chip *chip, unsigned offset, int value
 			CLEAR_BIT32(dev->mcu_gpio_bank.mcu_gpio_value[port], bit_index);
 		//set the mask the bit in the mask to signal poll/read and the value
 		SET_BIT32(dev->mcu_gpio_bank.mcu_gpio_mask[port], bit_index);
-		//pr_err("mcu_gpio_value %s() %d %d %d %d %d\n", __func__,dev->mcu_gpio_bank.mcu_gpio_value[0],dev->mcu_gpio_bank.mcu_gpio_value[1],dev->mcu_gpio_bank.mcu_gpio_value[2],dev->mcu_gpio_bank.mcu_gpio_value[3],dev->mcu_gpio_bank.mcu_gpio_value[4] );
+		//pr_notice("mcu_gpio_value %s() %d %d %d %d %d\n", __func__,dev->mcu_gpio_bank.mcu_gpio_value[0],dev->mcu_gpio_bank.mcu_gpio_value[1],dev->mcu_gpio_bank.mcu_gpio_value[2],dev->mcu_gpio_bank.mcu_gpio_value[3],dev->mcu_gpio_bank.mcu_gpio_value[4] );
 	}
 
 	UNLOCK_BANK(dev->mcu_gpio_bank.lock, flags);
@@ -603,7 +557,7 @@ static int virt_gpio_mcu_get(struct gpio_chip *chip, unsigned offset)
 
 	DEFINE_LOCK_FLAGS(flags); // make last
 
-	pr_err("%s() bit_index %u, port %u offset %u \n", __func__, bit_index, port, offset);
+	pr_notice("%s() bit_index %u, port %u offset %u \n", __func__, bit_index, port, offset);
 
 	LOCK_BANK(dev->mcu_gpio_bank.lock, flags);
 
@@ -615,10 +569,10 @@ static int virt_gpio_mcu_get(struct gpio_chip *chip, unsigned offset)
 		//__set_bit(bit_index, (unsigned long *)&dev->mcu_gpio_bank.mcu_gpio_mask[port]);
 		UNLOCK_BANK(dev->mcu_gpio_bank.lock, flags);
 		//Wait for response
-		//pr_err("%s() before wait\n", __func__);
+		//pr_notice("%s() before wait\n", __func__);
 		dev->mcu_gpio_bank.returned_flag = REQUEST_SENT;
 		wait_event_interruptible_exclusive(dev->mcu_gpio_bank.mcu_wq, REQUEST_SENT != dev->mcu_gpio_bank.returned_flag);
-		//pr_err("%s() after wait %d \n", __func__, dev->mcu_gpio_bank.returned_flag);
+		//pr_notice("%s() after wait %d \n", __func__, dev->mcu_gpio_bank.returned_flag);
 		
 		if (NO_REQUEST != dev->mcu_gpio_bank.returned_flag) {
 			dev->mcu_gpio_bank.returned_flag = NO_REQUEST;
@@ -640,23 +594,23 @@ static int virt_gpio_mcu_get(struct gpio_chip *chip, unsigned offset)
 
 static int virt_gpio_in_get(struct gpio_chip *chip, unsigned offset)
 {
-	struct virt_gpio *dev = g_pvpgio;
+	struct virt_gpio * dev = g_pvpgio;
 
-	//    printk("%s: %lx\n", __func__, dev->gpi_values);
+//    printk("%s: %lx\n", __func__, dev->gpi_values);
 	return test_bit(offset, &dev->gpi_values) ? 1 : 0;
 }
 
 static void virt_gpio_out_set(struct gpio_chip *chip, unsigned offset, int value)
 {
-	struct virt_gpio *dev = g_pvpgio;
+	struct virt_gpio * dev = g_pvpgio;
 	DEFINE_LOCK_FLAGS(flags); // make last
 
-	//pr_debug("%s() offset %d value %d\n", __func__, offset, value);
+	pr_debug("%s() offset %d value %d\n", __func__, offset, value);
 
 	LOCK_BANK(dev->gpo_bank.lock, flags);
 
 	__set_bit(offset, &dev->gpo_bank.gpio_mask);
-	if (value)
+	if(value)
 		__set_bit(offset, &dev->gpo_bank.gpio_value);
 	else
 		__clear_bit(offset, &dev->gpo_bank.gpio_value);
@@ -707,28 +661,28 @@ static int virt_gpio_mcu_direction_output(struct gpio_chip *chip, unsigned offse
 }
 
 static const struct file_operations vgpio_dev_fops = {
-	.owner = THIS_MODULE,
+	.owner  = THIS_MODULE,
 	.llseek = no_llseek,
 	.read = virt_gpio_chr_read,
 	.write = virt_gpio_chr_write,
 	.open = vgpio_dev_open,
 	.release = vgpio_dev_release,
-	.poll = vgpio_dev_poll,
+	.poll   = vgpio_dev_poll,
 };
 
 static struct miscdevice vgpio_dev = {
-	.minor = MISC_DYNAMIC_MINOR,
-	.name = "vgpio",
-	.fops = &vgpio_dev_fops,
+	.minor		= MISC_DYNAMIC_MINOR,
+	.name		= "vgpio",
+	.fops		= &vgpio_dev_fops,
 };
 
 static int __init virtual_gpio_init(void)
 {
-	struct virt_gpio *dev;
+	struct virt_gpio * dev;
 	int ret;
 
 	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
-	if (!dev)
+	if(!dev)
 		return -ENOMEM;
 
 	g_pvpgio = dev;
@@ -747,8 +701,7 @@ static int __init virtual_gpio_init(void)
 #endif
 
 	ret = misc_register(&vgpio_dev);
-	if (ret)
-	{
+	if(ret) {
 		pr_err("%s() Unable to register misc device \n", __func__);
 		return ret;
 	}
@@ -794,49 +747,42 @@ static int __init virtual_gpio_init(void)
 	pr_debug("in base %d\n", dev->gpiochip_in.base);
 
 	gpiochip_add(&dev->gpiochip_mcu);
-	pr_err("in base %d\n", dev->gpiochip_mcu.base);
+	pr_notice("in base %d\n", dev->gpiochip_mcu.base);
 
-	gpio_in_notify(0, 0);
-	//
+    gpio_in_notify(0, 0);
+//
 	ret = sysfs_create_group(&vgpio_dev.this_device->kobj, &in_attr_group);
-	if (ret)
-	{
+	if (ret) {
 		pr_err("%s: could not create sysfs group [%d]\n", __func__, ret);
 	}
-	//
+//
 	return 0;
 }
 
 static void __exit virtual_gpio_exit(void)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 18, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
 	int ret;
 #endif
-	struct virt_gpio *dev;
+	struct virt_gpio * dev;
 	dev = g_pvpgio;
 
-	if (dev->enabled_out)
-	{
+	if(dev->enabled_out) {
 		int i;
 		pr_info("some vgpio_in gpios are still enabled.\n");
-		for (i = 0; i < dev->gpiochip_out.ngpio; i++)
-		{
-			if ((dev->enabled_out & (1 << i)))
-			{
+		for(i = 0; i < dev->gpiochip_out.ngpio; i++) {
+			if( (dev->enabled_out & (1<<i)) ) {
 				pr_info("free vgpio_in %d.\n", i);
 				gpio_free(dev->gpiochip_out.base + i);
 			}
 		}
 	}
 
-	if (dev->enabled_in)
-	{
+	if(dev->enabled_in) {
 		int i;
 		pr_info("some vgpio_out gpios are still enabled.\n");
-		for (i = 0; i < dev->gpiochip_in.ngpio; i++)
-		{
-			if ((dev->enabled_in & (1 << i)))
-			{
+		for(i = 0; i < dev->gpiochip_in.ngpio; i++) {
+			if( (dev->enabled_in & (1<<i)) ) {
 				pr_info("free vgpio_out %d.\n", i);
 				gpio_free(dev->gpiochip_in.base + i);
 			}
@@ -844,21 +790,22 @@ static void __exit virtual_gpio_exit(void)
 	}
 
 	// gpiochip_remove returns void in 3.18
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 18, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
 	ret =
 #endif
-		gpiochip_remove(&dev->gpiochip_in);
+	gpiochip_remove(&dev->gpiochip_in);
 
 	// gpiochip_remove returns void in 3.18
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 18, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
 	ret =
 #endif
-		gpiochip_remove(&dev->gpiochip_out);
+	gpiochip_remove(&dev->gpiochip_out);
 
 	misc_deregister(&vgpio_dev);
 
 	kfree(dev);
 }
+
 
 module_init(virtual_gpio_init);
 module_exit(virtual_gpio_exit);

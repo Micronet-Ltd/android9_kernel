@@ -8732,6 +8732,7 @@ static int smbchg_probe(struct spmi_device *spmi)
 		goto out;
 	}
 
+	INIT_DELAYED_WORK(&chip->thermal_handling_work, smbchg_thermal_handling_work);
 	rc = determine_initial_status(chip);
 	if (rc < 0) {
 		dev_err(&spmi->dev,
@@ -8820,7 +8821,6 @@ static int smbchg_probe(struct spmi_device *spmi)
 			get_prop_batt_present(chip),
 			chip->dc_present, chip->usb_present);
     chip->abnormal_temperature = 0;
-    INIT_DELAYED_WORK(&chip->thermal_handling_work, smbchg_thermal_handling_work);
     schedule_delayed_work(&chip->thermal_handling_work, msecs_to_jiffies(100));
 	return 0;
 
