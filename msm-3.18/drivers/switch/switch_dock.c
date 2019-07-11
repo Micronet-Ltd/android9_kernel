@@ -590,7 +590,7 @@ static irqreturn_t dock_switch_irq_handler(int irq, void *arg)
 // the pins IGN and CRADLE_DETECT ara swapped in hardware
 //
 
-//    disable_irq_nosync(irq);
+    disable_irq_nosync(irq);
 //    pr_notice("irq[%d]\n", irq);
 
     if (irq == ds->dock_irq) {
@@ -602,9 +602,9 @@ static irqreturn_t dock_switch_irq_handler(int irq, void *arg)
     if (irq == ds->ign_irq) {
 //        pr_notice("dock/ign state [%d]\n", gpio_get_value(ds->ign_pin));
         ds->sched_irq |= SWITCH_DOCK;
-        if (0 == ds->irq_ack) {
+        //if (0 == ds->irq_ack) {
             sched = 1;
-        }
+        //}
         ds->irq_ack++; 
     }
 
