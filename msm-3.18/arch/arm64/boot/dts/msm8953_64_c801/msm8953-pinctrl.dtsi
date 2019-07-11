@@ -580,7 +580,7 @@
 		blsp2_uart0_short_active: blsp2_uart0_short_active {
 			mux {
 				pins = "gpio16", "gpio17";
-				function = "msm_uart1";
+				function = "blsp_uart5";
 			};
 
 			config {

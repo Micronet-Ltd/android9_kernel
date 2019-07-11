@@ -88,6 +88,7 @@
 
 &usb3 {
 	vbus_dwc3-supply = <&smbcharger_charger_otg>;
+	qcom,detect-dpdm-floating;
 };
 
 &mdss_dsi1 {
