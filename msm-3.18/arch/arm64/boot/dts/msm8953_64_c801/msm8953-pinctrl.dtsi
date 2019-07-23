@@ -585,7 +585,7 @@
 
 			config {
 				pins = "gpio16", "gpio17";
-				drive-strength = <16>;
+				drive-strength = <4>;
 				bias-disable;
 			};
 		};
