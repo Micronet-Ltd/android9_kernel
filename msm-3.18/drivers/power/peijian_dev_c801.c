@@ -11,6 +11,19 @@
  */
 #include "peijian_dev_c801.h"
 
+static ssize_t board_id_show(struct device *pdev,
+			   struct device_attribute *attr, char *buf)
+{
+	int ret[3];
+
+	ret[0] = gpio_get_value(94);
+	ret[1] = gpio_get_value(95);
+	ret[2] = gpio_get_value(96);
+
+	return snprintf(buf, PAGE_SIZE, "%d%d%d\n", ret[0],ret[1],ret[2]);
+}
+static DEVICE_ATTR(board_id, 0440, board_id_show, NULL);
+
 static ssize_t pogo_irq_store(struct device *pdev, struct device_attribute *attr,
 			    const char *buff, size_t size)
 {
@@ -369,6 +382,13 @@ static int peijian_dev_probe(struct platform_device *pdev)
 	if (IS_ERR(pdata->dev))
 		return PTR_ERR(pdata->dev);
 
+	ret = device_create_file(pdata->dev, &dev_attr_board_id);
+		if (ret) {
+			pr_err("peijian ext dev can not create file board_id");
+			device_destroy(pdata->peijian_dev_class, pdata->dev->devt);
+			return ret;
+		}
+
 	ret = device_create_file(pdata->dev, &dev_attr_pogo_irq);
 		if (ret) {
 			pr_err("peijian ext dev can not create file pogo_irq");
@@ -423,6 +443,7 @@ static int peijian_dev_remove(struct platform_device *pdev)
 	{
 		destroy_workqueue(pdata->peijian_wq);
 	}
+	device_remove_file(pdata->dev, &dev_attr_board_id);
 	device_remove_file(pdata->dev, &dev_attr_pogo_irq);
 	device_remove_file(pdata->dev, &dev_attr_gpio_en);
 	device_destroy(pdata->peijian_dev_class, pdata->dev->devt);

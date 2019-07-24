@@ -71,6 +71,5 @@ dsi_adv7533_1024_600p: qcom,mdss_dsi_adv7533_1024_600p {
 			1c 08 02 03 01 03 04 a0];
 		qcom,dba-panel;
 		qcom,bridge-name = "adv7533";
-		status = "disabled";
 	};
 };
