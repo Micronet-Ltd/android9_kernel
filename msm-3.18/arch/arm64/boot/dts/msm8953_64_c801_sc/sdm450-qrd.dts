@@ -1,0 +1,122 @@
+/*
+ * Copyright (c) 2017, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+/dts-v1/;
+
+#include "sdm450.dtsi"
+#include "msm-pmi8950.dtsi"
+
+/ {
+	model = "Qualcomm Technologies, Inc. SDM450 + PMI8950 QRD";
+	compatible = "qcom,sdm450-qrd", "qcom,sdm450", "qcom,qrd";
+	qcom,board-id = <0x0005000b 0>;
+};
+
+&soc {
+	led_flash0: qcom,camera-flash {
+		cell-index = <0>;
+		compatible = "qcom,camera-flash";
+		qcom,flash-type = <1>;
+		qcom,flash-source = <&pmi8950_flash0 &pmi8950_flash1>;
+		qcom,torch-source = <&pmi8950_torch0 &pmi8950_torch1>;
+		qcom,switch-source = <&pmi8950_switch>;
+	};
+};
+
+#include "msm8953-qrd-sku3.dtsi"
+
+&soc {
+	virtual_leds {
+		compatible = "virtual-leds";
+		status = "okay";
+	};
+
+	virtual_j1708 {
+		compatible = "virtual-j1708";
+		status = "okay";
+	};
+
+	watchdogpin {
+		compatible = "mcn,watchdog-pin";
+		pinctrl-names = "watchdog_pin_active", "watchdog_pin_suspend";
+		pinctrl-0 = <&watchdog_pin_active>;		
+		pinctrl-1 = <&watchdog_pin_suspend>;
+		mcn,toggle-pin = <&tlmm 6 0>;
+		mcn,rf-kill-pin = <&tlmm 63 0>;
+		mcn,high-delay=<1000>;
+		mcn,low-delay=<1000>;
+		status = "okay";
+	};
+	dock {
+		compatible = "mcn,dock-switch";
+		pinctrl-names = "dock_pins_active", "dock_pin_suspend";
+		pinctrl-0 = <&dock_pins_active>;
+		pinctrl-1 = <&dock_pin_suspend>;
+		mcn,dock-pin = <&tlmm 13 GPIO_ACTIVE_LOW>;
+		mcn,ign-pin = <&tlmm 36 GPIO_ACTIVE_LOW>;
+		/* usb switch hw controlled by vbus_cradle signal */
+		mcn,usb-switch-pin = <&tlmm 12 GPIO_ACTIVE_HIGH>;
+		/*mcn,otg-en-pin = <&tlmm 97 GPIO_ACTIVE_HIGH>;*/
+		interrupt-names = "docking", "ignition";
+		interrupt-parent = <&tlmm>;
+		interrupts = <&tlmm 13 0>, <&tlmm 36 0>;
+		status = "okay";
+	};
+};
+/*
+&pm8953_typec {
+	qcom,role-reversal-supported;
+};
+*/
+
+&blsp2_uart0 {
+	pinctrl-names = "sleep", "default";
+	pinctrl-0 = <&blsp2_uart0_short_sleep>;
+	pinctrl-1 = <&blsp2_uart0_short_active>;
+	status = "okay";
+};
+
+&usb3 {
+	vbus_dwc3-supply = <&smbcharger_charger_otg>;
+	qcom,detect-dpdm-floating;
+};
+
+&mdss_dsi1 {
+	lab-supply = <&lab_regulator>;
+	ibb-supply = <&ibb_regulator>;
+};
+
+&dsi_panel_pwr_supply {
+	qcom,panel-supply-entry@2 {
+		reg = <2>;
+		qcom,supply-name = "lab";
+		qcom,supply-min-voltage = <4600000>;
+		qcom,supply-max-voltage = <6000000>;
+		qcom,supply-enable-load = <100000>;
+		qcom,supply-disable-load = <100>;
+	};
+
+	qcom,panel-supply-entry@3 {
+		reg = <3>;
+		qcom,supply-name = "ibb";
+		qcom,supply-min-voltage = <4600000>;
+		qcom,supply-max-voltage = <6000000>;
+		qcom,supply-enable-load = <100000>;
+		qcom,supply-disable-load = <100>;
+		qcom,supply-post-on-sleep = <10>;
+	};
+};
+
+&i2c_2 {
+	status = "disabled";
+};
