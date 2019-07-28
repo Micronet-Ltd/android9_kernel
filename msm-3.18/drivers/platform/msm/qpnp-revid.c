@@ -231,7 +231,7 @@ static int qpnp_revid_probe(struct spmi_device *spmi)
 
 	build_pmic_string(pmic_string, PMIC_STRING_MAXLENGTH, spmi->sid,
 			pmic_subtype, rev1, rev2, rev3, rev4);
-	pr_notice("%s options: %d, %d, %d, %d\n",
+	pr_info("%s options: %d, %d, %d, %d\n",
 			pmic_string, option1, option2, option3, option4);
 	return 0;
 }

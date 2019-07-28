@@ -585,7 +585,7 @@
 
 			config {
 				pins = "gpio16", "gpio17";
-				drive-strength = <16>;
+				drive-strength = <4>;
 				bias-disable;
 			};
 		};
@@ -1749,7 +1749,7 @@
 			};
 		};
 /*
-mightn't be used now because i2c_c connected to mdss
+cradle connectivety
 */
 		watchdog_pin {
 			watchdog_pin_active: watchdog_pin_active {
@@ -1778,10 +1778,6 @@ mightn't be used now because i2c_c connected to mdss
 				};
 			};
 		};
-/**/
-/*
-gpio97 otg_en control? usb switch hw controlled by vbus_cradle signal
-*/
 		dock {
 			dock_pins_active: dock_pins_active {
 				mux {
@@ -1809,6 +1805,5 @@ gpio97 otg_en control? usb switch hw controlled by vbus_cradle signal
 				};
 			};
 		};
-/**/
 	};
 };
