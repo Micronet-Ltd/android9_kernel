@@ -2640,7 +2640,7 @@ static int recalculate_soc(struct qpnp_bms_chip *chip)
 						LR_MUX1_BATT_THERM, rc);
 			soc = chip->calculated_soc;
 		} else {
-			pr_notice("batt_temp phy = %lld meas = 0x%llx\n",
+			pr_debug("batt_temp phy = %lld meas = 0x%llx\n",
 							result.physical,
 							result.measurement);
 			batt_temp = (int)result.physical;
@@ -4190,7 +4190,7 @@ static int refresh_die_temp_monitor(struct qpnp_bms_chip *chip)
 
 	rc = qpnp_vadc_read(chip->vadc_dev, DIE_TEMP, &result);
 
-	pr_notice("low = %lld, high = %lld\n",
+	pr_debug("low = %lld, high = %lld\n",
 			result.physical - chip->temperature_margin,
 			result.physical + chip->temperature_margin);
 	chip->die_temp_monitor_params.high_temp = result.physical
@@ -4289,7 +4289,7 @@ static int qpnp_bms_probe(struct spmi_device *spmi)
 		pr_err("Error reading version register %d\n", rc);
 		goto error_read;
 	}
-	pr_notice("BMS version: %hhu.%hhu\n", chip->revision2, chip->revision1);
+	pr_debug("BMS version: %hhu.%hhu\n", chip->revision2, chip->revision1);
 
 	rc = qpnp_read_wrapper(chip, &chip->iadc_bms_revision2,
 			chip->iadc_base + REVISION2, 1);
@@ -4304,7 +4304,7 @@ static int qpnp_bms_probe(struct spmi_device *spmi)
 		pr_err("Error reading version register %d\n", rc);
 		goto error_read;
 	}
-	pr_notice("IADC_BMS version: %hhu.%hhu\n",
+	pr_debug("IADC_BMS version: %hhu.%hhu\n",
 			chip->iadc_bms_revision2, chip->iadc_bms_revision1);
 
 	rc = bms_read_properties(chip);
@@ -4422,7 +4422,7 @@ static int qpnp_bms_probe(struct spmi_device *spmi)
 		goto unregister_dc;
 	}
 
-	pr_notice("probe success: soc =%d vbatt = %d ocv = %d r_sense_uohm = %u warm_reset = %d\n",
+	pr_info("probe success: soc =%d vbatt = %d ocv = %d r_sense_uohm = %u warm_reset = %d\n",
 			get_prop_bms_capacity(chip), vbatt, chip->last_ocv_uv,
 			chip->r_sense_uohm, warm_reset);
 	return 0;
