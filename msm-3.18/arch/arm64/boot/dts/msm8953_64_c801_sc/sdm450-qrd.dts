@@ -58,18 +58,18 @@
 		status = "okay";
 	};
 	dock {
-		compatible = "mcn,dock-switch";
+		compatible = "mcn,fixed-dock-switch";
 		pinctrl-names = "dock_pins_active", "dock_pin_suspend";
 		pinctrl-0 = <&dock_pins_active>;
 		pinctrl-1 = <&dock_pin_suspend>;
-		mcn,dock-pin = <&tlmm 13 GPIO_ACTIVE_LOW>;
+		/*mcn,dock-pin = <&tlmm 13 GPIO_ACTIVE_LOW>;*/
 		mcn,ign-pin = <&tlmm 36 GPIO_ACTIVE_LOW>;
 		/* usb switch hw controlled by vbus_cradle signal */
 		mcn,usb-switch-pin = <&tlmm 12 GPIO_ACTIVE_HIGH>;
 		/*mcn,otg-en-pin = <&tlmm 97 GPIO_ACTIVE_HIGH>;*/
-		interrupt-names = "docking", "ignition";
+		interrupt-names = "ignition";
 		interrupt-parent = <&tlmm>;
-		interrupts = <&tlmm 13 0>, <&tlmm 36 0>;
+		interrupts = <&tlmm 36 0>;
 		status = "okay";
 	};
 };
