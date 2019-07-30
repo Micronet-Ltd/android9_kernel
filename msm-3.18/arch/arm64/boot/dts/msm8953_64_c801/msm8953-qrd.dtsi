@@ -36,7 +36,6 @@
 			linux,code = <102>;
 			debounce-interval = <15>;
 		};
-
 	};
 
 	i2c@78b7000 { /* BLSP1 QUP3 */
@@ -145,24 +144,6 @@
 			default-state = "off";
 			retain-state-suspended;
 		};
-		
-
-	};
-	peijian-dev {
-		compatible = "lovdream,peijian-dev";
-		pinctrl-names = "peijian_dev_active";
-		pinctrl-0 = <&peijian_dev_active &peijian_dev_irq>;
-
-		peijian_pogo_irq = <&tlmm 36 0>;
-		peijian_pogo_pin4 = <&tlmm 107 0>;
-		peijian_pogo_pin8 = <&tlmm 6 0>;
-
-		peijian_pogo_pin13 = <&tlmm 16 0>;
-		peijian_pogo_pin21 = <&tlmm 7 0>;
-		peijian_pogo_pin22 = <&tlmm 22 0>;
-		peijian_pogo_pin24 = <&tlmm 13 0>;
-		peijian_pogo_pin26 = <&tlmm 17 0>;
-
 	};
 };
 
@@ -192,16 +173,20 @@
 
 / {
 	qrd_batterydata: qcom,battery-data {
-		qcom,batt-id-range-pct = <100>;
-		qcom,rpull-up-kohm = <100>;
+		/*qcom,batt-id-range-pct = <15>;
+		#include "batterydata-qrd-sku1-4v4-2800mah.dtsi"*/
+		qcom,batt-id-range-pct = <40>;
+		qcom,rpull-up-kohm = <10>;
 		qcom,vref-batt-therm-uv = <1800000>;
-		#include "batterydata-lovdream-c801-4v2-6600mah_10k.dtsi"
+		#include "batterydata-hwe30100100_2p-c801-4v2-6600mah_10k.dtsi"
+		#include "batterydata-fullymax-fb382030xl-c801-4v2-135mah_20k.dtsi"
 	};
 };
 
 &pm8953_typec {
 	ss-mux-supply = <&pm8953_l6>;
 	qcom,ssmux-gpio = <&tlmm 139 GPIO_ACTIVE_LOW>;
+	qcom,role-reversal-supported;
 	pinctrl-names = "default";
 	pinctrl-0 = <&typec_ssmux_config>;
 };
@@ -209,21 +194,26 @@
 &pmi8950_charger {
 	qcom,battery-data = <&qrd_batterydata>;
 	qcom,float-voltage-mv = <4200>;
-	//qcom,chg-led-sw-controls;
-	//qcom,chg-led-support;
-	//qcom,external-typec;
-	//qcom,typec-psy-name = "typec";
-	qcom,thermal-mitigation = <2650 2650 2650 2650 2600 700 0>;
+	/*qcom,chg-led-sw-controls;*/
+	/*qcom,chg-led-support;*/
+	/*qcom,external-typec;
+	qcom,typec-psy-name = "typec";
+	qcom,thermal-mitigation = <2650 2650 2650 2650 2600 700 0>;*/
+	qcom,thermal-mitigation = <3000 2500 2000 1500 1000 500 0>;
+	/*should be enabled after battery profile and charger testing*/
+	qcom,override-usb-current;
 	status = "okay";
 };
 
 &pmi8950_fg {
 	qcom,battery-data = <&qrd_batterydata>;
-	qcom,cold-bat-decidegc = <(-50)>;
-	qcom,cool-bat-decidegc = <(-50)>;
-	qcom,warm-bat-decidegc = <550>;
-	qcom,hot-bat-decidegc = <550>;
-	//qcom,bad-battery-detection-enable;
+	qcom,fg-cc-cv-threshold-mv = <4190>;
+	qcom,resume-soc = <70>;
+	qcom,cold-bat-decidegc = <(-150)>;
+	qcom,cool-bat-decidegc = <0>;
+	qcom,warm-bat-decidegc = <450>;
+	qcom,hot-bat-decidegc = <650>;
+	qcom,bad-battery-detection-enable;
 	qcom,hold-soc-while-full;
 };
 

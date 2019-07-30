@@ -369,6 +369,7 @@ struct device_node *of_batterydata_get_best_profile(
 			if (rc)
 				continue;
 			for (i = 0; i < batt_ids.num; i++) {
+			pr_notice("%s:%d,batt_ids.kohm[%d] = %d,batt_id_kohm = %d\n",__FUNCTION__,__LINE__,i,batt_ids.kohm[i],batt_id_kohm);
 				delta = abs(batt_ids.kohm[i] - batt_id_kohm);
 				limit = (batt_ids.kohm[i] * id_range_pct) / 100;
 				in_range = (delta <= limit);

@@ -7,7 +7,8 @@
  * This file contains driver APIs to the irq subsystem.
  */
 
-#define pr_fmt(fmt) "genirq: " fmt
+//#define pr_fmt(fmt) "genirq: " fmt
+#define pr_fmt(fmt) "%s %s: " fmt, KBUILD_MODNAME, __func__
 
 #include <linux/irq.h>
 #include <linux/kthread.h>
@@ -530,6 +531,7 @@ int irq_set_irq_wake(unsigned int irq, unsigned int on)
 	/* wakeup-capable irqs can be shared between drivers that
 	 * don't need to have the same sleep mode behaviors.
 	 */
+//    pr_notice("%s IRQ %d(%d)\n", desc->action && desc->action->name ? desc->action->name : "unknown", irq, on);
 	if (on) {
 		if (desc->wake_depth++ == 0) {
 			ret = set_irq_wake_real(irq, on);
@@ -540,7 +542,7 @@ int irq_set_irq_wake(unsigned int irq, unsigned int on)
 		}
 	} else {
 		if (desc->wake_depth == 0) {
-			WARN(1, "Unbalanced IRQ %d wake disable\n", irq);
+			pr_notice("Unbalanced IRQ %d wake disable\n", irq);
 		} else if (--desc->wake_depth == 0) {
 			ret = set_irq_wake_real(irq, on);
 			if (ret)

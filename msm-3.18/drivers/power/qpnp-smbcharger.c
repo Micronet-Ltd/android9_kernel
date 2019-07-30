@@ -285,6 +285,8 @@ struct smbchg_chip {
 	struct votable			*hw_aicl_rerun_enable_indirect_votable;
 	struct votable			*aicl_deglitch_short_votable;
 	struct votable			*hvdcp_enable_votable;
+    struct delayed_work		thermal_handling_work;
+    int                     abnormal_temperature;
 };
 
 enum qpnp_schg {
@@ -417,7 +419,8 @@ enum wake_reason {
 #define	HVDCP_OTG_VOTER			"HVDCP_OTG_VOTER"
 #define	HVDCP_PULSING_VOTER		"HVDCP_PULSING_VOTER"
 
-static int smbchg_debug_mask;
+static int smbchg_debug_mask = 	PR_INTERRUPT | PR_TYPEC;
+
 module_param_named(
 	debug_mask, smbchg_debug_mask, int, S_IRUSR | S_IWUSR
 );
@@ -479,7 +482,7 @@ module_param_named(
 #define pr_smb(reason, fmt, ...)				\
 	do {							\
 		if (smbchg_debug_mask & (reason))		\
-			pr_info(fmt, ##__VA_ARGS__);		\
+			pr_notice(fmt, ##__VA_ARGS__);		\
 		else						\
 			pr_debug(fmt, ##__VA_ARGS__);		\
 	} while (0)
@@ -1459,6 +1462,7 @@ static void use_pmi8996_tables(struct smbchg_chip *chip)
 static int smbchg_charging_en(struct smbchg_chip *chip, bool en)
 {
 	/* The en bit is configured active low */
+    pr_notice("%s charging\n", (en)?"resume":"suspend");
 	return smbchg_masked_write(chip, chip->bat_if_base + CMD_CHG_REG,
 			EN_BAT_CHG_BIT, en ? 0 : EN_BAT_CHG_BIT);
 }
@@ -1801,6 +1805,31 @@ static int smbchg_set_usb_current_max(struct smbchg_chip *chip,
 				goto out;
 			}
 			chip->usb_max_current_ma = 900;
+		}
+		
+		if (chip->cfg_override_usb_current) {
+			current_ma = CURRENT_1500_MA;
+			pr_notice("%s:%d:current_ma = %d\n",__FUNCTION__,__LINE__,current_ma);
+			if (current_ma == CURRENT_1500_MA) {
+				/*
+				 * allow setting the current value as reported
+				 * by USB driver.
+				 */
+				rc = smbchg_set_high_usb_chg_current(chip,
+							current_ma);
+				if (rc < 0) {
+					pr_err("Couldn't set %dmA rc = %d\n",
+							current_ma, rc);
+					goto out;
+				}
+				rc = smbchg_masked_write(chip,
+					chip->usb_chgpth_base + CMD_IL,
+					ICL_OVERRIDE_BIT, ICL_OVERRIDE_BIT);
+				if (rc < 0)
+					pr_err("Couldn't set ICL override rc = %d\n",rc);
+						chip->usb_max_current_ma = 1500;
+			}
+
 		}
 		break;
 	case POWER_SUPPLY_TYPE_USB_CDP:
@@ -4353,7 +4382,7 @@ static int smbchg_register_chg_led(struct smbchg_chip *chip)
 	chip->led_cdev.name = "red";
 	chip->led_cdev.brightness_set = smbchg_chg_led_brightness_set;
 	chip->led_cdev.brightness_get = smbchg_chg_led_brightness_get;
-
+	
 	rc = led_classdev_register(chip->dev, &chip->led_cdev);
 	if (rc) {
 		dev_err(chip->dev, "unable to register charger led, rc=%d\n",
@@ -6119,7 +6148,6 @@ static void smbchg_external_power_changed(struct power_supply *psy)
 
 	if (usb_supply_type != POWER_SUPPLY_TYPE_USB)
 		goto  skip_current_for_non_sdp;
-	
 
 	pr_smb(PR_MISC, "usb type = %s current_limit = %d\n",
 			usb_type_name, current_limit);
@@ -6486,6 +6514,75 @@ static int smbchg_dc_is_writeable(struct power_supply *psy,
 	return rc;
 }
 
+#define CHG_STATE_HYSTERESIS	20
+
+struct battery_health {
+    int val;
+    char *name;
+};
+
+static struct battery_health health_string[] = {
+    { POWER_SUPPLY_HEALTH_UNKNOWN,  "unknown" },
+	{ POWER_SUPPLY_HEALTH_GOOD,     "good" },
+	{ POWER_SUPPLY_HEALTH_OVERHEAT, "overheat" },
+    { POWER_SUPPLY_HEALTH_UNKNOWN,  "unknown" },
+    { POWER_SUPPLY_HEALTH_UNKNOWN,  "unknown" },
+    { POWER_SUPPLY_HEALTH_UNKNOWN,  "unknown" },
+	{ POWER_SUPPLY_HEALTH_COLD,     "cold" },
+    { POWER_SUPPLY_HEALTH_UNKNOWN,  "unknown" },
+    { POWER_SUPPLY_HEALTH_UNKNOWN,  "unknown" },
+	{ POWER_SUPPLY_HEALTH_WARM,     "worm" },
+	{ POWER_SUPPLY_HEALTH_COOL,     "cool" },
+	{ -1,                           0      },
+};
+
+static void smbchg_thermal_handling_work(struct work_struct *work)
+{
+	struct smbchg_chip *chip = container_of(work, struct smbchg_chip, thermal_handling_work.work);
+    int batt_temp_decic, batt_warm_temp_decic, batt_cool_temp_decic;
+    int batt_health;
+
+    batt_temp_decic = get_prop_batt_temp(chip);
+    batt_health = get_prop_batt_health(chip);
+
+    if (get_property_from_fg(chip, POWER_SUPPLY_PROP_WARM_TEMP, &batt_warm_temp_decic)) {
+        pr_err("warm temperature not defined\n");
+        batt_warm_temp_decic = DEFAULT_BATT_TEMP;
+    }
+
+    if (get_property_from_fg(chip, POWER_SUPPLY_PROP_COOL_TEMP, &batt_cool_temp_decic)) {
+        pr_err("cool temperature not defined\n");
+        batt_cool_temp_decic = DEFAULT_BATT_TEMP;
+    }
+
+    pr_notice("%s [%d, %d] deciC\n", health_string[batt_health].name, batt_temp_decic, chip->abnormal_temperature);
+
+	if (chip->abnormal_temperature) {
+		if (POWER_SUPPLY_HEALTH_GOOD == batt_health) {
+            if ((batt_temp_decic > batt_cool_temp_decic + CHG_STATE_HYSTERESIS) && (batt_temp_decic < batt_warm_temp_decic - CHG_STATE_HYSTERESIS)) {
+                mutex_lock(&chip->therm_lvl_lock);
+                chip->abnormal_temperature = 0;
+                mutex_unlock(&chip->therm_lvl_lock);
+                vote(chip->battchg_suspend_votable, BATTCHG_USER_EN_VOTER, 0, 0);
+                return;
+            }
+		}
+	} else {
+        if (POWER_SUPPLY_HEALTH_GOOD != batt_health) {
+            mutex_lock(&chip->therm_lvl_lock);
+            chip->abnormal_temperature = 1;
+            mutex_unlock(&chip->therm_lvl_lock);
+            vote(chip->battchg_suspend_votable, BATTCHG_USER_EN_VOTER, 1, 0);
+        } else {
+            return;
+        }
+    }
+
+    schedule_delayed_work(&chip->thermal_handling_work, msecs_to_jiffies(60000));
+
+    return;
+}
+
 #define HOT_BAT_HARD_BIT	BIT(0)
 #define HOT_BAT_SOFT_BIT	BIT(1)
 #define COLD_BAT_HARD_BIT	BIT(2)
@@ -6539,10 +6636,12 @@ static irqreturn_t batt_warm_handler(int irq, void *_chip)
 	chip->batt_warm = !!(reg & HOT_BAT_SOFT_BIT);
 	pr_smb(PR_INTERRUPT, "triggered: 0x%02x\n", reg);
 	smbchg_parallel_usb_check_ok(chip);
+    schedule_delayed_work(&chip->thermal_handling_work, 0);
 	if (chip->psy_registered)
 		power_supply_changed(&chip->batt_psy);
 	set_property_on_fg(chip, POWER_SUPPLY_PROP_HEALTH,
 			get_prop_batt_health(chip));
+
 	return IRQ_HANDLED;
 }
 
@@ -6555,10 +6654,12 @@ static irqreturn_t batt_cool_handler(int irq, void *_chip)
 	chip->batt_cool = !!(reg & COLD_BAT_SOFT_BIT);
 	pr_smb(PR_INTERRUPT, "triggered: 0x%02x\n", reg);
 	smbchg_parallel_usb_check_ok(chip);
+    schedule_delayed_work(&chip->thermal_handling_work, 0);
 	if (chip->psy_registered)
 		power_supply_changed(&chip->batt_psy);
 	set_property_on_fg(chip, POWER_SUPPLY_PROP_HEALTH,
 			get_prop_batt_health(chip));
+
 	return IRQ_HANDLED;
 }
 
@@ -8631,6 +8732,7 @@ static int smbchg_probe(struct spmi_device *spmi)
 		goto out;
 	}
 
+	INIT_DELAYED_WORK(&chip->thermal_handling_work, smbchg_thermal_handling_work);
 	rc = determine_initial_status(chip);
 	if (rc < 0) {
 		dev_err(&spmi->dev,
@@ -8711,13 +8813,15 @@ static int smbchg_probe(struct spmi_device *spmi)
 	update_usb_status(chip, is_usb_present(chip), false);
 	dump_regs(chip);
 	create_debugfs_entries(chip);
-	dev_info(chip->dev,
+	dev_notice(chip->dev,
 		"SMBCHG successfully probe Charger version=%s Revision DIG:%d.%d ANA:%d.%d batt=%d dc=%d usb=%d\n",
 			version_str[chip->schg_version],
 			chip->revision[DIG_MAJOR], chip->revision[DIG_MINOR],
 			chip->revision[ANA_MAJOR], chip->revision[ANA_MINOR],
 			get_prop_batt_present(chip),
 			chip->dc_present, chip->usb_present);
+    chip->abnormal_temperature = 0;
+    schedule_delayed_work(&chip->thermal_handling_work, msecs_to_jiffies(100));
 	return 0;
 
 unregister_led_class:

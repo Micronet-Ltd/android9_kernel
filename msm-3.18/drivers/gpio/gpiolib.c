@@ -992,8 +992,8 @@ static int _gpiod_direction_output_raw(struct gpio_desc *desc, int value)
 	/* GPIOs used for IRQs shall not be set as output */
 	if (test_bit(FLAG_USED_AS_IRQ, &desc->flags)) {
 		gpiod_err(desc,
-			  "%s: tried to set a GPIO tied to an IRQ as output\n",
-			  __func__);
+			  "%s: %s tried to set a GPIO tied to an IRQ as output\n",
+			  __func__, (desc->chip->label)?desc->chip->label:"uncknown");
 		return -EIO;
 	}
 
@@ -1353,6 +1353,7 @@ int gpio_lock_as_irq(struct gpio_chip *chip, unsigned int offset)
 		return -EIO;
 	}
 
+    pr_notice("%s: %s.%d\n", __func__, (chip->label)?chip->label:"uncknown", offset);
 	set_bit(FLAG_USED_AS_IRQ, &chip->desc[offset].flags);
 	return 0;
 }
@@ -1371,6 +1372,7 @@ void gpio_unlock_as_irq(struct gpio_chip *chip, unsigned int offset)
 	if (offset >= chip->ngpio)
 		return;
 
+    pr_notice("%s: %s.%d\n", __func__, (chip->label)?chip->label:"uncknown", offset);
 	clear_bit(FLAG_USED_AS_IRQ, &chip->desc[offset].flags);
 }
 EXPORT_SYMBOL_GPL(gpio_unlock_as_irq);
