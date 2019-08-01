@@ -59,7 +59,106 @@ int wait_for(int time){
 }
 
 int hi_3w_tx_cmd(uint32_t *cmd, bool wait_for_response)
-{   
+{
+    uint8_t msg;
+    int response_bit_cnt = 0;
+    int cmd_bit_cnt = 0;    
+    uint32_t response;
+    int ack_val; 
+    int initial_val;  
+    //int i; 
+
+    if (!hi_dev) {
+        return GENERAL_ERROR;
+    }
+
+    if (!gpio_is_valid(hi_dev->hi_3w_clock_pin) || !gpio_is_valid(hi_dev->hi_3w_mosi_pin) || !gpio_is_valid(hi_dev->hi_3w_miso_pin)) {
+        pr_err("one of the gpio is invalid\n");
+        return NOT_AVAILABLE;
+    }
+
+    mutex_lock(&hi_dev->lock);
+    //read the inital state of the input pin
+    initial_val = gpio_get_value(hi_dev->hi_3w_miso_pin);
+    pr_notice("the initial value of miso pin: %d\n", initial_val);
+    if (initial_val == GPIO_LOW) {
+        pr_err("The initial value of input gpio is invalid\n");
+
+        mutex_unlock(&hi_dev->lock);
+
+        //error, something went wrong, the input should be set to high
+        return NOT_AVAILABLE;
+    }
+
+    //wake the MCU
+    pr_notice("setting clock pin as low\n");
+    gpio_set_value(hi_dev->hi_3w_clock_pin, GPIO_LOW);    
+    wait_for(WAIT_DELAY_INTERVAL); 
+    pr_notice("setting clock pin as high\n");
+    gpio_set_value(hi_dev->hi_3w_clock_pin, GPIO_HIGH);   
+
+    msg = (*cmd)>>24;
+    pr_notice("the command to send is: %d\n", msg);
+
+    //send the command to MCU
+    /*for (i = 0; i < CMD_LEN; i++) {  
+        gpio_set_value(hi_dev->hi_3w_mosi_pin, (msg >> i)&1);        
+        wait_for(WAIT_DELAY_INTERVAL);
+        gpio_set_value(hi_dev->hi_3w_clock_pin, GPIO_LOW);
+        wait_for(WAIT_DELAY_INTERVAL);
+        gpio_set_value(hi_dev->hi_3w_clock_pin, GPIO_HIGH);
+    }*/
+
+    do {
+        pr_notice("sending bit: %d, value: %d\n", cmd_bit_cnt, msg &1);
+        gpio_set_value(hi_dev->hi_3w_mosi_pin, msg &1);        
+        wait_for(WAIT_DELAY_INTERVAL);
+        pr_notice("setting clock pin as low\n");
+        gpio_set_value(hi_dev->hi_3w_clock_pin, GPIO_LOW);
+        wait_for(WAIT_DELAY_INTERVAL);
+        pr_notice("setting clock pin as high\n");
+        gpio_set_value(hi_dev->hi_3w_clock_pin, GPIO_HIGH);
+
+        msg >>= 1;
+        cmd_bit_cnt++;
+    }while (cmd_bit_cnt < CMD_LEN);
+
+    //read the ack from MCU
+    pr_notice("reading the ack...\n");
+    response |= gpio_get_value(hi_dev->hi_3w_miso_pin);
+    pr_notice("ack value is: %d\n", ack_val);
+    if (ack_val == GPIO_LOW) {
+         //ACK is received
+        if (wait_for_response){
+            //read the response
+            pr_notice("waiting for response...\n");
+            do {
+
+                response <<= 1;
+
+                gpio_set_value(hi_dev->hi_3w_clock_pin, GPIO_LOW);
+                wait_for(WAIT_DELAY_INTERVAL);
+                gpio_set_value(hi_dev->hi_3w_clock_pin, GPIO_HIGH);
+                
+                response |= gpio_get_value(hi_dev->hi_3w_miso_pin);
+                pr_notice("current response bit: %d, value: %d\n", response_bit_cnt, response);                
+                
+                response_bit_cnt++; 
+            }while (response_bit_cnt < RESPONSE_MSG_LEN);
+
+            (*cmd) |= response;
+        }
+    }
+    else{
+        pr_notice("recieved NACK on command request\n");
+
+        mutex_unlock(&hi_dev->lock);
+        //NACK is received
+        return CMD_REJECTED;
+    }
+
+    pr_notice("the response is: %d\n", response);
+    mutex_unlock(&hi_dev->lock);
     return NO_ERROR;
 }
 EXPORT_SYMBOL(hi_3w_tx_cmd);
