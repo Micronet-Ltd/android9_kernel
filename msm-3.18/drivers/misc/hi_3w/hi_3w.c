@@ -123,7 +123,13 @@ int hi_3w_tx_cmd(uint32_t *cmd, bool wait_for_response)
     }while (cmd_bit_cnt < CMD_LEN);
 
     //read the ack from MCU
+    wait_for(WAIT_DELAY_INTERVAL);
+    gpio_set_value(hi_dev->hi_3w_clock_pin, GPIO_LOW);
+    wait_for(WAIT_DATA_VALID);
     ack_val = gpio_get_value(hi_dev->hi_3w_miso_pin);
+    wait_for(WAIT_DATA_INVALID);
+    gpio_set_value(hi_dev->hi_3w_clock_pin, GPIO_HIGH);
+
     if (ack_val == GPIO_LOW) {
          //ACK is received
         if (wait_for_response){
@@ -131,12 +137,12 @@ int hi_3w_tx_cmd(uint32_t *cmd, bool wait_for_response)
             //pr_notice("waiting for response...\n");
             response = 0;
             do {
-
-                gpio_set_value(hi_dev->hi_3w_clock_pin, GPIO_LOW);
                 wait_for(WAIT_DELAY_INTERVAL);
-                gpio_set_value(hi_dev->hi_3w_clock_pin, GPIO_HIGH);
-                
+                gpio_set_value(hi_dev->hi_3w_clock_pin, GPIO_LOW);
+                wait_for(WAIT_DATA_VALID);
                 response |= (gpio_get_value(hi_dev->hi_3w_miso_pin) << response_bit_cnt);
+                wait_for(WAIT_DATA_INVALID);
+                gpio_set_value(hi_dev->hi_3w_clock_pin, GPIO_HIGH);
                 
                 response_bit_cnt++; 
             }while (response_bit_cnt < RESPONSE_MSG_LEN);

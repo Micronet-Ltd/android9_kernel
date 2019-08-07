@@ -11,6 +11,8 @@
 #define GPIO_LOW            0
 #define GPIO_HIGH           1
 #define WAIT_DELAY_INTERVAL 2500 
+#define WAIT_DATA_VALID     (WAIT_DELAY_INTERVAL >> 1)
+#define WAIT_DATA_INVALID   (WAIT_DELAY_INTERVAL - WAIT_DATA_VALID)
 #define RESPONSE_MSG_LEN    23
 #define CMD_LEN             8
 
