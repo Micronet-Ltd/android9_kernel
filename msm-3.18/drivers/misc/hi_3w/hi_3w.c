@@ -92,6 +92,7 @@ int hi_3w_tx_cmd(uint32_t *cmd, bool wait_for_response)
     }
 
     //wake the MCU
+    pr_notice("the command to send is: %d\n", msg);
     pr_notice("wake slave\n");
 
     mutex_lock(&hi_dev->lock);
@@ -100,7 +101,6 @@ int hi_3w_tx_cmd(uint32_t *cmd, bool wait_for_response)
     gpio_set_value(hi_dev->hi_3w_clock_pin, GPIO_HIGH);   
 
     msg = (*cmd)>>24;
-    pr_notice("the command to send is: %d\n", msg);
 
     //send the command to MCU
     /*for (i = 0; i < CMD_LEN; i++) {  
