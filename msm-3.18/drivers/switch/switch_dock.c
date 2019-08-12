@@ -540,33 +540,83 @@ static void dock_switch_work_func(struct work_struct *work)
 	}
 }
 
+#define SC_IG_HI    110
+#define SC_IG_LOW   55
+
 static void dock_switch_work_func_fix(struct work_struct *work)
 {
 	struct dock_switch_device *ds  = container_of(work, struct dock_switch_device, work);
     int val = 0;
-    
+//    union power_supply_propval prop = {0,};
+
+    if (!ds->usb_psy) {
+        pr_notice("usb power supply not ready %lld\n", ktime_to_ms(ktime_get()));
+        ds->usb_psy = power_supply_get_by_name("usb");
+        msleep(200);
+        schedule_work(&ds->work);
+
+        return;
+    }
 
     // Vladimir:
     // PATERN_INTERIM should be replaced by correct
     //
+    mutex_lock(&ds->lock);
     val = wait_for_stable_signal(ds->dock_pin, DEBOUNCE_INTERIM + PATERN_INTERIM);
     val = pulses2freq(val, PATERN_INTERIM);
     pr_notice("%d HZ %lld\n", val, ktime_to_ms(ktime_get()));
-    val = freq2pattern(val);
 
     if (ds->dock_active_l == gpio_get_value(ds->dock_pin) ) {
-        val &= ~(SWITCH_IGN | SWITCH_DOCK | SWITCH_ODOCK);
-    } else {
-        val |= (SWITCH_DOCK | SWITCH_ODOCK);
-        if (0 /*ign pattern*/) {
-            val &= ~SWITCH_IGN;
-        } else {
-            val |= SWITCH_IGN;
+        val = 0; //&= ~(SWITCH_IGN | SWITCH_DOCK | SWITCH_ODOCK);
+        // Vladimir:
+        // might enabled later, after connectivety debugging
+        //
+        pr_notice("stm32 detached %lld\n", ktime_to_ms(ktime_get()));
+        #if 0
+        if (gpio_is_valid(ds->usb_switch_pin)) {
+            pr_notice("switch usb %s connector %lld\n", (e_dock_type_unspecified == ds->dock_type)?"type-c":"44-pin", ktime_to_ms(ktime_get()));
+            gpio_set_value(ds->usb_switch_pin, !ds->usb_switch_l);
         }
+        #endif
+    } else {
+        pr_notice("stm32 attached %lld\n", ktime_to_ms(ktime_get()));
+        if (val > SC_IG_HI) {
+            pr_notice("freq to high ignition off %lld\n", ktime_to_ms(ktime_get()));
+            val = (SWITCH_DOCK | SWITCH_ODOCK); 
+        } else if (val > (SC_IG_HI - SC_IG_HI/6)) {
+            pr_notice("ignition on %lld\n", ktime_to_ms(ktime_get()));
+            val = (SWITCH_DOCK | SWITCH_ODOCK | SWITCH_IGN); 
+        } else if (val > 1 && (val < SC_IG_LOW)) {
+            pr_notice("ignition off %lld\n", ktime_to_ms(ktime_get()));
+            val = (SWITCH_DOCK | SWITCH_ODOCK); 
+        } else {
+            val = ds->state;
+        }
+        // Vladimir:
+        // might enabled later, after connectivety debugging
+        //
+        #if 0
+        if (gpio_is_valid(ds->usb_switch_pin)) {
+            pr_notice("switch usb 44-pin connector %lld\n", ktime_to_ms(ktime_get()));
+            gpio_set_value(ds->usb_switch_pin, ds->usb_switch_l);
+        }
+        #endif
+    }
+    mutex_unlock(&ds->lock);
+
+    if (ds->sched_irq & SWITCH_IGN) {
+        pr_notice("enable ign/dock monitor irq[%d]\n", ds->dock_irq);
+        ds->sched_irq &= ~SWITCH_IGN;
+        enable_switch_irq(ds->dock_irq, 1);
+    }
+
+    if (ds->sched_irq & SWITCH_DOCK) {
+        pr_notice("enable dock/ign monitor irq[%d]\n", ds->ign_irq);
+        ds->sched_irq &= ~SWITCH_DOCK;
     }
 
     if (ds->state != val) {
-        pr_notice("ignition changed to %d\n", val);
+        pr_notice("dock state changed to %d\n", val);
 		ds->state = val;
 		switch_set_state(&ds->sdev, val);
 	}
@@ -1113,6 +1163,19 @@ static int dock_switch_probe(struct platform_device *pdev)
 
         mutex_init(&ds->lock);
         ds->irq_ack = 0;
+        ds->usb_switch_pin = of_get_named_gpio_flags(np,"mcn,usb-switch-pin", 0, (enum of_gpio_flags *)&ds->usb_switch_l);
+        if (gpio_is_valid(ds->usb_switch_pin)) {
+            ds->usb_switch_l = (OF_GPIO_ACTIVE_LOW != ds->usb_switch_l);
+            err = devm_gpio_request(dev, ds->usb_switch_pin, "usb_switch");
+            if (err) {
+                ds->usb_switch_pin = -1;
+                pr_err("usb switch pin is busy!\n");
+            } else {
+                gpio_direction_output(ds->usb_switch_pin, !!!ds->usb_switch_l);
+                gpio_export(ds->usb_switch_pin, 0);
+            }
+        }
+
         err = of_get_named_gpio_flags(np, "mcn,dock-pin", 0, (enum of_gpio_flags *)&ds->dock_active_l);
         if (!gpio_is_valid(err)) {
             pr_err("ivalid docking pin\n");
@@ -1171,18 +1234,6 @@ static int dock_switch_probe(struct platform_device *pdev)
 					}
 				}
 
-				ds->usb_switch_pin = of_get_named_gpio_flags(np,"mcn,usb-switch-pin", 0, (enum of_gpio_flags *)&ds->usb_switch_l);
-				if (gpio_is_valid(ds->usb_switch_pin)) {
-                    ds->usb_switch_l = (OF_GPIO_ACTIVE_LOW != ds->usb_switch_l);
-					err = devm_gpio_request(dev, ds->usb_switch_pin, "usb_switch");
-					if (err) {
-                        ds->usb_switch_pin = -1;
-						pr_err("usb switch pin is busy!\n");
-					} else {
-						gpio_direction_output(ds->usb_switch_pin, !!!ds->usb_switch_l);
-						gpio_export(ds->usb_switch_pin, 0);
-					}
-				}
                 ds->otg_en_pin = of_get_named_gpio_flags(np,"mcn,otg-en-pin", 0, (enum of_gpio_flags *)&ds->otg_en_l);
                 if (gpio_is_valid(ds->otg_en_pin)) {
                     ds->otg_en_l = (OF_GPIO_ACTIVE_LOW != ds->otg_en_l);
