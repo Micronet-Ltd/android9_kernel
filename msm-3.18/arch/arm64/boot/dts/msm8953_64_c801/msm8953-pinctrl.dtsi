@@ -1754,12 +1754,12 @@ cradle connectivety
 		watchdog_pin {
 			watchdog_pin_active: watchdog_pin_active {
 				mux {
-					pins = "gpio6", "gpio63";
+					pins = "gpio6", "gpio22", "gpio63";
 					function = "gpio";
 				};
 
 				config {
-					pins = "gpio6", "gpio63";
+					pins = "gpio6", "gpio22", "gpio63";
 					drive-strength = <2>;
 					bias-disable;
 				};
@@ -1767,12 +1767,12 @@ cradle connectivety
 
 			watchdog_pin_suspend: watchdog_pin_suspend {
 				mux {
-					pins = "gpio6", "gpio63";
+					pins = "gpio6", "gpio22", "gpio63";
 					function = "gpio";
 				};
 
 				config {
-					pins = "gpio6", "gpio63";
+					pins = "gpio6", "gpio22", "gpio63";
 					drive-strength = <2>;
 					bias-disable;
 				};
