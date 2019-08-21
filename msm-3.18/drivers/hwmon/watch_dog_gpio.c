@@ -409,7 +409,7 @@ static int watchdog_pin_probe(struct platform_device *op)
 		if (rc < 0) {
 			pr_err("suspend-ind-pin is busy\n");
 		} else {
-            inf->suspend_ind_a = 1;
+            inf->suspend_ind_a = 0;
 			gpio_direction_output(inf->suspend_ind, inf->suspend_ind_a^1);
 			gpio_export(inf->suspend_ind, 0);
 		}
