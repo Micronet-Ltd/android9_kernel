@@ -1871,7 +1871,11 @@ static void dwc3_msm_notify_event(struct dwc3 *dwc, unsigned event,
 		break;
 	case DWC3_CONTROLLER_SET_CURRENT_DRAW_EVENT:
 		dev_notice(mdwc->dev, "DWC3_CONTROLLER_SET_CURRENT_DRAW_EVENT [%u mA]\n", dwc->vbus_draw);
-		dwc3_msm_gadget_vbus_draw(mdwc, dwc->vbus_draw);
+        if (DWC3_PROPRIETARY_CHARGER == mdwc->chg_type) {
+            dwc3_msm_gadget_vbus_draw(mdwc, DWC3_HVDCP_CHG_MAX); 
+        } else {
+            dwc3_msm_gadget_vbus_draw(mdwc, dwc->vbus_draw); 
+        }
 		break;
 	case DWC3_CONTROLLER_RESTART_USB_SESSION:
 		dev_dbg(mdwc->dev, "DWC3_CONTROLLER_RESTART_USB_SESSION received\n");
@@ -4035,8 +4039,7 @@ static void dwc3_msm_otg_sm_work(struct work_struct *w)
 				pm_runtime_get_noresume(mdwc->dev);
 				dwc3_initialize(mdwc);
 				/* check dp/dm for SDP & runtime_put if !SDP */
-				if (mdwc->detect_dpdm_floating &&
-					mdwc->chg_type == DWC3_SDP_CHARGER) {
+				if (mdwc->detect_dpdm_floating && mdwc->chg_type == DWC3_SDP_CHARGER) {
 					dwc3_check_float_lines(mdwc);
 					if (mdwc->chg_type != DWC3_SDP_CHARGER)
 						break;
@@ -4086,6 +4089,10 @@ static void dwc3_msm_otg_sm_work(struct work_struct *w)
                     curr = dcp_max_current;
                 }
                 dwc3_msm_gadget_vbus_draw(mdwc, curr);
+                if (mdwc->cradle_state) {
+                    dwc3_otg_start_peripheral(mdwc, 1);
+                    mdwc->otg_state = OTG_STATE_B_PERIPHERAL;
+                }
 				dbg_event(0xFF, "RelDCPBIDLE", 0);
 				pm_relax(mdwc->dev);
 				break;
@@ -4110,14 +4117,15 @@ static void dwc3_msm_otg_sm_work(struct work_struct *w)
 						&mdwc->dev->power.usage_count));
                 work = 1;
 				/* check dp/dm for SDP & runtime_put if !SDP */
-				if (mdwc->detect_dpdm_floating &&
-				    mdwc->chg_type == DWC3_SDP_CHARGER) {
+				if (mdwc->detect_dpdm_floating && mdwc->chg_type == DWC3_SDP_CHARGER) {
 					dwc3_check_float_lines(mdwc);
 					if (mdwc->chg_type != DWC3_SDP_CHARGER) {
                         dev_notice(mdwc->dev, "DP/DM are float, replace charger by DWC3_PROPRIETARY_CHARGER\n");
 						break;
                     }
-				}
+                } else if (mdwc->cradle_state) {
+                    mdwc->chg_type = DWC3_PROPRIETARY_CHARGER;
+                }
 				dwc3_otg_start_peripheral(mdwc, 1);
 				mdwc->otg_state = OTG_STATE_B_PERIPHERAL;
 				break;

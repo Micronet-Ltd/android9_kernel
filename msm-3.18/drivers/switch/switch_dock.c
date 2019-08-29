@@ -547,7 +547,7 @@ static void dock_switch_work_func_fix(struct work_struct *work)
 {
 	struct dock_switch_device *ds  = container_of(work, struct dock_switch_device, work);
     int val = 0;
-//    union power_supply_propval prop = {0,};
+    union power_supply_propval prop = {0,};
 
     if (!ds->usb_psy) {
         pr_notice("usb power supply not ready %lld\n", ktime_to_ms(ktime_get()));
@@ -568,18 +568,18 @@ static void dock_switch_work_func_fix(struct work_struct *work)
 
     if (ds->dock_active_l == gpio_get_value(ds->dock_pin) ) {
         val = 0; //&= ~(SWITCH_IGN | SWITCH_DOCK | SWITCH_ODOCK);
-        // Vladimir:
-        // might enabled later, after connectivety debugging
-        //
         pr_notice("stm32 detached %lld\n", ktime_to_ms(ktime_get()));
-        #if 0
         if (gpio_is_valid(ds->usb_switch_pin)) {
-            pr_notice("switch usb %s connector %lld\n", (e_dock_type_unspecified == ds->dock_type)?"type-c":"44-pin", ktime_to_ms(ktime_get()));
+            pr_notice("switch usb to type-c connector %lld\n", ktime_to_ms(ktime_get()));
             gpio_set_value(ds->usb_switch_pin, !ds->usb_switch_l);
         }
-        #endif
+        prop.intval = 0x0;
+        power_supply_set_usb_otg(ds->usb_psy, prop.intval);
     } else {
         pr_notice("stm32 attached %lld\n", ktime_to_ms(ktime_get()));
+        prop.intval = 0x20;
+        power_supply_set_usb_otg(ds->usb_psy, prop.intval);
+        power_supply_set_current_limit(ds->usb_psy, 1500*1000);
         if (val > SC_IG_HI) {
             pr_notice("freq to high ignition off %lld\n", ktime_to_ms(ktime_get()));
             val = (SWITCH_DOCK | SWITCH_ODOCK); 
@@ -592,15 +592,6 @@ static void dock_switch_work_func_fix(struct work_struct *work)
         } else {
             val = ds->state;
         }
-        // Vladimir:
-        // might enabled later, after connectivety debugging
-        //
-        #if 0
-        if (gpio_is_valid(ds->usb_switch_pin)) {
-            pr_notice("switch usb 44-pin connector %lld\n", ktime_to_ms(ktime_get()));
-            gpio_set_value(ds->usb_switch_pin, ds->usb_switch_l);
-        }
-        #endif
     }
     mutex_unlock(&ds->lock);
 
@@ -617,6 +608,15 @@ static void dock_switch_work_func_fix(struct work_struct *work)
 
     if (ds->state != val) {
         pr_notice("dock state changed to %d\n", val);
+        if (val & SWITCH_ODOCK) {
+            wake_lock(&ds->wlock);
+            if (gpio_is_valid(ds->usb_switch_pin)) {
+                pr_notice("switch usb 44-pin connector %lld\n", ktime_to_ms(ktime_get()));
+                gpio_set_value(ds->usb_switch_pin, ds->usb_switch_l);
+            }
+        } else {
+            wake_unlock(&ds->wlock);
+        }
 		ds->state = val;
 		switch_set_state(&ds->sdev, val);
 	}
@@ -1199,11 +1199,11 @@ static int dock_switch_probe(struct platform_device *pdev)
             gpio_export(ds->dock_pin, 1);
         }
 
+        wake_lock_init(&ds->wlock, WAKE_LOCK_SUSPEND, "switch_dock_wait_lock");
 		if (DOCK_SWITCH_PORTABLE == compatible) {
             ds->usb_psy = power_supply_get_by_name("usb");
 
             INIT_WORK(&ds->work, dock_switch_work_func);
-            wake_lock_init(&ds->wlock, WAKE_LOCK_SUSPEND, "switch_dock_wait_lock");
 
 			pr_notice("dock active level %s\n", (ds->dock_active_l)?"high":"low");
 			err = of_get_named_gpio_flags(np, "mcn,ign-pin", 0, (enum of_gpio_flags *)&ds->ign_active_l);
