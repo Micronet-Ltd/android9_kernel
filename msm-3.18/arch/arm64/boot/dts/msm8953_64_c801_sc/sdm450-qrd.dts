@@ -37,7 +37,7 @@
 
 &soc {
 	virtual_leds {
-		compatible = "virtual-leds";
+		compatible = "virtual-leds-fixed";
 		status = "okay";
 	};
 
@@ -47,7 +47,7 @@
 	};
 
 	watchdogpin {
-		compatible = "mcn,watchdog-pin";
+		compatible = "mcn,fixed-watchdog-pin";
 		pinctrl-names = "watchdog_pin_active", "watchdog_pin_suspend";
 		pinctrl-0 = <&watchdog_pin_active>;		
 		pinctrl-1 = <&watchdog_pin_suspend>;

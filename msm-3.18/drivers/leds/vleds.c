@@ -258,6 +258,7 @@ static struct vled_data *vled_create_of(struct platform_device *pdev)
 
 static const struct of_device_id of_vled_match[] = {
 	{ .compatible = "virtual-leds", },
+    { .compatible = "virtual-leds-fixed", },
 	{},
 };
 #else
