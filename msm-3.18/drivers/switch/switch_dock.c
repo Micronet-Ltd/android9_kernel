@@ -590,7 +590,7 @@ static void dock_switch_work_func_fix(struct work_struct *work)
             pr_notice("ignition off %lld\n", ktime_to_ms(ktime_get()));
             val = (SWITCH_DOCK | SWITCH_ODOCK); 
         } else {
-            val = ds->state;
+            val = (ds->state)?ds->state:SWITCH_DOCK;;
         }
     }
     mutex_unlock(&ds->lock);
