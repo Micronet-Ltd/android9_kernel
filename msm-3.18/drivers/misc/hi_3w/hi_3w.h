@@ -23,4 +23,5 @@
 #define NOT_AVAILABLE       -2
 #define CMD_REJECTED        -3
 
+extern int hi_3w_tx_cmd(uint32_t *, bool);
 
