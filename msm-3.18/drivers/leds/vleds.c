@@ -24,16 +24,19 @@
 #include <linux/poll.h>
 #include <linux/spinlock.h>
 #include <asm/uaccess.h>
+#include "../misc/hi_3w/hi_3w.h"
 
 struct vled_data {
     struct device           dev;
     struct led_classdev     cdev_0;
     struct led_classdev     cdev_1;
+    struct led_classdev     cdev_a;
     struct miscdevice       mdev;
     unsigned long open;
     unsigned int c, prev_led0, prev_led1;
     spinlock_t vled_lock;
     unsigned long lock_flags;
+    int	portable;
 };
 
 static int vleds_open(struct inode *inode, struct file *file)
@@ -173,10 +176,28 @@ static void vled_set(struct led_classdev *led_cdev, enum led_brightness value)
     spin_unlock_irqrestore(&vleds->vled_lock, vleds->lock_flags);
 }
 
+static void aled_set(struct led_classdev *led_cdev, enum led_brightness value)
+{
+    struct vled_data * vleds;
+    uint32_t cmd;
+
+    vleds = container_of(led_cdev, struct vled_data, cdev_a);
+
+    spin_lock_irqsave(&vleds->vled_lock, vleds->lock_flags);
+    if (value > led_cdev->max_brightness) {
+        value = led_cdev->max_brightness;
+    }
+    value |= 0x10;
+    cmd = value<<24;
+    spin_unlock_irqrestore(&vleds->vled_lock, vleds->lock_flags);
+    hi_3w_tx_cmd(&cmd, 0);
+}
+
 static void vled_delete(struct vled_data *led)
 {
     led_classdev_unregister(&led->cdev_0);
     led_classdev_unregister(&led->cdev_1);
+    led_classdev_unregister(&led->cdev_a);
 
     misc_deregister(&led->mdev);
 }
@@ -195,11 +216,25 @@ ATTRIBUTE_GROUPS(vleds);
 static struct vled_data *vled_create_of(struct platform_device *pdev)
 {
 	struct vled_data *led;
+    struct device_node *np = pdev->dev.of_node;	
 	int err;
+    const char *comp;
+
+    if (!np) {
+        dev_err(&pdev->dev, "device tree isn't defined\n");
+        return ERR_PTR(-ENOENT);
+    }
 
 	led = devm_kzalloc(&pdev->dev, sizeof(*led), GFP_KERNEL);
 	if (!led)
 		return ERR_PTR(-ENOMEM);
+
+    comp = of_get_property(np, "compatible", NULL);
+    if (comp && 0 == strncmp("virtual-leds-fixed", comp, sizeof("virtual-leds-fixed") - sizeof(char))) {
+        led->portable = 0;
+    } else {
+        led->portable = 1;
+    }
 
     led->prev_led0 = led->prev_led1 = -1;
     led->c = 0;
@@ -228,14 +263,30 @@ static struct vled_data *vled_create_of(struct platform_device *pdev)
     led->cdev_1.flags |= LED_CORE_SUSPENDRESUME;
 //    led->cdev_1.groups = vleds_groups;
 
-
 //    printk("%s: register %s\n", __func__, led->cdev_1.name);
 
     err = led_classdev_register(pdev->dev.parent, &led->cdev_1);
     if (err < 0) {
-        led_classdev_unregister(&led->cdev_1);
+        led_classdev_unregister(&led->cdev_0);
         kfree(led);
         return ERR_PTR(err);
+    }
+
+    if (!led->portable) {
+        led->cdev_a.name = "aled";
+        led->cdev_a.default_trigger = "none";
+        led->cdev_a.brightness_set = aled_set;
+        led->cdev_a.brightness = LED_OFF;
+        led->cdev_a.max_brightness = LED_OFF + 1;
+        led->cdev_a.flags |= LED_CORE_SUSPENDRESUME;
+
+        err = led_classdev_register(pdev->dev.parent, &led->cdev_a);
+        if (err < 0) {
+            led_classdev_unregister(&led->cdev_0);
+            led_classdev_unregister(&led->cdev_1);
+            kfree(led);
+            return ERR_PTR(err);
+        }
     }
 
     led->mdev.minor = MISC_DYNAMIC_MINOR;
@@ -246,8 +297,9 @@ static struct vled_data *vled_create_of(struct platform_device *pdev)
 
     err = misc_register(&led->mdev);
     if(err) {
+        led_classdev_unregister(&led->cdev_0);
         led_classdev_unregister(&led->cdev_1);
-        led_classdev_unregister(&led->cdev_1);
+        led_classdev_unregister(&led->cdev_a);
         kfree(led);
         printk("%s: failure to register misc device \n", __func__);
         return ERR_PTR(err);
@@ -258,6 +310,7 @@ static struct vled_data *vled_create_of(struct platform_device *pdev)
 
 static const struct of_device_id of_vled_match[] = {
 	{ .compatible = "virtual-leds", },
+    { .compatible = "virtual-leds-fixed", },
 	{},
 };
 #else

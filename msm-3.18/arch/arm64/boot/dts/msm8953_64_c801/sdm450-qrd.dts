@@ -52,6 +52,7 @@
 		pinctrl-0 = <&watchdog_pin_active>;		
 		pinctrl-1 = <&watchdog_pin_suspend>;
 		mcn,toggle-pin = <&tlmm 6 0>;
+		mcn,suspend-ind-pin = <&tlmm 22 0>;
 		mcn,rf-kill-pin = <&tlmm 63 0>;
 		mcn,high-delay=<1000>;
 		mcn,low-delay=<1000>;

@@ -57,6 +57,7 @@ struct watch_dog_pin_info{
     unsigned long awake_delay_max;
     unsigned long reject_suspend;
     struct pinctrl *pctl;
+    int	portable;
 };
 
 int proc_rf_kill_pin = -1;
@@ -243,7 +244,7 @@ static void watchdog_toggle_work(struct work_struct *work)
             d = 0;
         }
 #else
-        d = 0;
+        d = !inf->portable;
 #endif
         gpio_set_value(inf->toggle_pin, (int)d);
         return;
@@ -306,6 +307,7 @@ static int watchdog_pin_probe(struct platform_device *op)
     struct pinctrl_state *pctls;
 	int rc;
 	int irq;
+    const char *comp;
 
 	if (!np) {
 		dev_err(dev, "Can not find config!\n");
@@ -318,6 +320,15 @@ static int watchdog_pin_probe(struct platform_device *op)
 		return -ENOMEM;
 	}
 
+
+    comp = of_get_property(np, "compatible", NULL);
+    if (comp && 0 == strncmp("mcn,fixed-watchdog-pin", comp, sizeof("mcn,fixed-watchdog-pin") - sizeof(char))) {
+        inf->portable = 0;
+    } else {
+        inf->portable = 1;
+    }
+
+    pr_notice("TAB8 %s \n", (1 == inf->portable)?"portable":"fixed");
 
     inf->pctl = devm_pinctrl_get(dev);
     if (IS_ERR(inf->pctl)) {
@@ -409,7 +420,7 @@ static int watchdog_pin_probe(struct platform_device *op)
 		if (rc < 0) {
 			pr_err("suspend-ind-pin is busy\n");
 		} else {
-            inf->suspend_ind_a = 1;
+            inf->suspend_ind_a = 0;
 			gpio_direction_output(inf->suspend_ind, inf->suspend_ind_a^1);
 			gpio_export(inf->suspend_ind, 0);
 		}
@@ -437,7 +448,7 @@ static int watchdog_pin_probe(struct platform_device *op)
 
     spin_lock_init(&inf->rfkillpin_lock);
 	
-    inf->state = 0;
+    inf->state = !inf->portable;
     if (inf->high_delay == inf->low_delay) {
         inf->suspend = -1;
     } else {
@@ -521,7 +532,7 @@ static int watchdog_pin_prepare(struct device *dev)
 
     if (gpio_is_valid(wdi->toggle_pin)) {
         pr_notice("set toggle pin to inactive [%d] %lld\n", wdi->state, ktime_to_ms(ktime_get()));
-        d = 0;
+        d = !wdi->portable;
         if (wdi->high_delay == wdi->low_delay) {
             //d = 1;
         }
@@ -665,6 +676,7 @@ static const struct dev_pm_ops watchdog_pin_pm_ops =
 
 static struct of_device_id watchdog_pin_match[] = {
 	{ .compatible = "mcn,watchdog-pin", },
+    { .compatible = "mcn,fixed-watchdog-pin", },
 	{},
 };
 
