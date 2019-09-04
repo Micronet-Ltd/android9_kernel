@@ -161,7 +161,7 @@ int hi_3w_tx_cmd(uint32_t *cmd, bool wait_for_response)
 
     return err;
 }
-EXPORT_SYMBOL(hi_3w_tx_cmd);
+EXPORT_SYMBOL_GPL(hi_3w_tx_cmd);
 
 
 static ssize_t hi_3w_rx_show(struct device *dev, struct device_attribute *attr, char *buf)
