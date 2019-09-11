@@ -73,6 +73,17 @@
 		interrupts = <&tlmm 13 0>, <&tlmm 36 0>;
 		status = "okay";
 	};
+	dev_info {
+		compatible = "mcn,device-info";
+		pinctrl-names = "dev_info_active", "dev_info_suspend";
+		pinctrl-0 = <&dev_info_active>;
+		pinctrl-1 = <&dev_info_suspend>;
+		mcn,board-id-0 = <&tlmm 94 GPIO_ACTIVE_LOW>;
+		mcn,board-id-1 = <&tlmm 95 GPIO_ACTIVE_LOW>;
+		mcn,board-id-2 = <&tlmm 96 GPIO_ACTIVE_LOW>;
+		status = "okay";
+	};
+
 };
 /*
 &pm8953_typec {
