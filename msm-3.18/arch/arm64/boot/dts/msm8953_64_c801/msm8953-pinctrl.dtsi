@@ -1805,5 +1805,32 @@ cradle connectivety
 				};
 			};
 		};
+		dev_info {
+			dev_info_active: dev_info_active {
+				mux {
+					pins = "gpio94", "gpio95", "gpio96";
+					function = "gpio";
+				};
+
+				config {
+					pins = "gpio94", "gpio95", "gpio96";
+					drive-strength = <2>;
+					bias-disable;
+				};
+			};
+
+			dev_info_suspend: dev_info_suspend {
+				mux {
+					pins = "gpio94", "gpio95", "gpio96";
+					function = "gpio";
+				};
+
+				config {
+					pins = "gpio94", "gpio95", "gpio96";
+					drive-strength = <2>;
+					bias-disable;
+				};
+			};
+		};
 	};
 };
