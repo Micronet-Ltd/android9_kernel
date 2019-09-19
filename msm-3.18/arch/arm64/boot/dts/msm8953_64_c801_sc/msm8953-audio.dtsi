@@ -17,7 +17,6 @@
 	qcom,model = "msm8953-snd-card-mtp";
 
 	/*qcom,cdc-us-euro-gpios = <&tlmm 63 0>;*/
-	qcom,msm-spk-ext-pa = <&tlmm 47 0>;
 	qcom,msm-mbhc-hphl-swh = <1>;
 	qcom,msm-mbhc-gnd-swh = <0>;
 	qcom,msm-hs-micbias-type = "internal";

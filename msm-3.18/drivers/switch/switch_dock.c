@@ -87,12 +87,14 @@ struct dock_switch_device {
     int 	ign_pin;
     int     usb_switch_pin;
     int     otg_en_pin;
+    int     mic_sw_pin;
     int     dock_irq;
     int 	ign_irq;
 	int	    dock_active_l;
 	int	    ign_active_l;
     int     usb_switch_l;
     int     otg_en_l;
+    int     mic_sw_l;
     unsigned sched_irq;
 	int	    state;
     struct  wake_lock wlock;
@@ -1173,6 +1175,18 @@ static int dock_switch_probe(struct platform_device *pdev)
             } else {
                 gpio_direction_output(ds->usb_switch_pin, !!!ds->usb_switch_l);
                 gpio_export(ds->usb_switch_pin, 0);
+            }
+        }
+        ds->mic_sw_pin = of_get_named_gpio_flags(np,"mcn,mic-switch-pin", 0, (enum of_gpio_flags *)&ds->mic_sw_l);
+        if (gpio_is_valid(ds->mic_sw_pin)) {
+            ds->mic_sw_l = (OF_GPIO_ACTIVE_LOW != ds->mic_sw_l);
+            err = devm_gpio_request(dev, ds->mic_sw_pin, "mic_switch");
+            if (err) {
+                ds->mic_sw_pin = -1;
+                pr_err("usb switch pin is busy!\n");
+            } else {
+                gpio_direction_output(ds->mic_sw_pin, !!!ds->mic_sw_l);
+                gpio_export(ds->mic_sw_pin, 0);
             }
         }
 
