@@ -87,12 +87,14 @@ struct dock_switch_device {
     int 	ign_pin;
     int     usb_switch_pin;
     int     otg_en_pin;
+    int     mic_sw_pin;
     int     dock_irq;
     int 	ign_irq;
 	int	    dock_active_l;
 	int	    ign_active_l;
     int     usb_switch_l;
     int     otg_en_l;
+    int     mic_sw_l;
     unsigned sched_irq;
 	int	    state;
     struct  wake_lock wlock;
@@ -566,13 +568,19 @@ static void dock_switch_work_func_fix(struct work_struct *work)
     val = pulses2freq(val, PATERN_INTERIM);
     pr_notice("%d HZ %lld\n", val, ktime_to_ms(ktime_get()));
 
-    if (ds->dock_active_l == gpio_get_value(ds->dock_pin) ) {
+    if (ds->dock_active_l == gpio_get_value(ds->dock_pin) && val < 2) {
         val = 0; //&= ~(SWITCH_IGN | SWITCH_DOCK | SWITCH_ODOCK);
         pr_notice("stm32 detached %lld\n", ktime_to_ms(ktime_get()));
         if (gpio_is_valid(ds->usb_switch_pin)) {
             pr_notice("switch usb to type-c connector %lld\n", ktime_to_ms(ktime_get()));
             gpio_set_value(ds->usb_switch_pin, !ds->usb_switch_l);
         }
+
+        if (gpio_is_valid(ds->mic_sw_pin)) {
+            pr_notice("switch mic_in1(mic1) to 28-pin connector %lld\n", ktime_to_ms(ktime_get()));
+            gpio_set_value(ds->mic_sw_pin, !ds->mic_sw_l);
+        }
+
         prop.intval = 0x0;
         power_supply_set_usb_otg(ds->usb_psy, prop.intval);
     } else {
@@ -614,6 +622,11 @@ static void dock_switch_work_func_fix(struct work_struct *work)
                 pr_notice("switch usb 44-pin connector %lld\n", ktime_to_ms(ktime_get()));
                 gpio_set_value(ds->usb_switch_pin, ds->usb_switch_l);
             }
+            if (gpio_is_valid(ds->mic_sw_pin)) {
+                pr_notice("switch mic_in1(mic4) to 44-pin connector %lld\n", ktime_to_ms(ktime_get()));
+                gpio_set_value(ds->mic_sw_pin, ds->mic_sw_l);
+            }
+
         } else {
             wake_unlock(&ds->wlock);
         }
@@ -1134,6 +1147,7 @@ static int dock_switch_probe(struct platform_device *pdev)
     }
     pr_notice("TAB8 %s \n", (DOCK_SWITCH_PORTABLE == compatible)?"portable":"fixed");
 
+    ds->state = 0;
     do {
         ds->pctl = devm_pinctrl_get(dev);
         if (IS_ERR(ds->pctl)) {
@@ -1173,6 +1187,18 @@ static int dock_switch_probe(struct platform_device *pdev)
             } else {
                 gpio_direction_output(ds->usb_switch_pin, !!!ds->usb_switch_l);
                 gpio_export(ds->usb_switch_pin, 0);
+            }
+        }
+        ds->mic_sw_pin = of_get_named_gpio_flags(np,"mcn,mic-switch-pin", 0, (enum of_gpio_flags *)&ds->mic_sw_l);
+        if (gpio_is_valid(ds->mic_sw_pin)) {
+            ds->mic_sw_l = (OF_GPIO_ACTIVE_LOW != ds->mic_sw_l);
+            err = devm_gpio_request(dev, ds->mic_sw_pin, "mic_switch");
+            if (err) {
+                ds->mic_sw_pin = -1;
+                pr_err("usb switch pin is busy!\n");
+            } else {
+                gpio_direction_output(ds->mic_sw_pin, !!!ds->mic_sw_l);
+                gpio_export(ds->mic_sw_pin, 0);
             }
         }
 
