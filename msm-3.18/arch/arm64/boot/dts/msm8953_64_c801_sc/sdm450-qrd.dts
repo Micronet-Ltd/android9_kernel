@@ -66,6 +66,7 @@
 		/* usb switch hw controlled by vbus_cradle signal */
 		mcn,usb-switch-pin = <&tlmm 12 GPIO_ACTIVE_HIGH>;
 		/*mcn,otg-en-pin = <&tlmm 97 GPIO_ACTIVE_HIGH>;*/
+		mcn,mic-switch-pin = <&tlmm 47 GPIO_ACTIVE_HIGH>;
 		interrupt-names = "cradle-detect";
 		interrupt-parent = <&tlmm>;
 		interrupts = <&tlmm 36 0>;
