@@ -85,6 +85,12 @@
 	};
 
 };
+
+&pm8953_rtc {
+	qcom,qpnp-rtc-write = <1>;
+	qcom,qpnp-rtc-alarm-pwrup = <1>;
+};
+
 /*
 &pm8953_typec {
 	qcom,role-reversal-supported;
