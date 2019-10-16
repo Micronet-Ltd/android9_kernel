@@ -203,26 +203,16 @@ static ssize_t ampl_show(struct device *dev, struct device_attribute *attr, char
 
 static DEVICE_ATTR(ampl_enable, S_IRUGO|S_IWUSR|S_IWGRP, ampl_show, ampl_store);
 
-/////////////////////////////////////////////////////////////////////////////////////////////////
-/*
-static RAW_NOTIFIER_HEAD(cradle_connected_chain);
-static DEFINE_RAW_SPINLOCK(cradle_connected_chain_lock);
+static RAW_NOTIFIER_HEAD(cradle_notify_chain);
+static DEFINE_RAW_SPINLOCK(cradle_notify_chain_lock);
 
-enum NOTIFICATION_REASONS
-{
-    CONNETED_TO_BASIC_CRADLE = 1,
-    DISCONNECTED_FROM_BASIC_CRADLE = 2,
-    CONNETED_TO_SMART_CRADLE = 3,
-    DISCONNECTED_FROM_SMART_CRADLE = 4,
-};
-
-void cradle_connect_notify(unsigned long reason, void *arg)
+void cradle_notify(unsigned long reason, void *arg)
 {
     unsigned long flags;
 
-    raw_spin_lock_irqsave(&cradle_connected_chain_lock, flags);
-    raw_notifier_call_chain(&cradle_connected_chain, reason, 0);
-    raw_spin_unlock_irqrestore(&cradle_connected_chain_lock, flags);
+    raw_spin_lock_irqsave(&cradle_notify_chain_lock, flags);
+    raw_notifier_call_chain(&cradle_notify_chain, reason, 0);
+    raw_spin_unlock_irqrestore(&cradle_notify_chain_lock, flags);
 }
 
 int cradle_register_notifier(struct notifier_block *nb)
@@ -230,9 +220,9 @@ int cradle_register_notifier(struct notifier_block *nb)
     unsigned long flags;
     int err;
 
-    raw_spin_lock_irqsave(&cradle_connected_chain_lock, flags);
-    err = raw_notifier_chain_register(&cradle_connected_chain, nb);
-    raw_spin_unlock_irqrestore(&cradle_connected_chain_lock, flags);
+    raw_spin_lock_irqsave(&cradle_notify_chain_lock, flags);
+    err = raw_notifier_chain_register(&cradle_notify_chain, nb);
+    raw_spin_unlock_irqrestore(&cradle_notify_chain_lock, flags);
 
     return err;
 }
@@ -243,15 +233,13 @@ int cradle_unregister_notifier(struct notifier_block *nb)
     unsigned long flags;
     int err;
 
-    raw_spin_lock_irqsave(&cradle_connected_chain_lock, flags);
-    err = raw_notifier_chain_unregister(&cradle_connected_chain, nb);
-    raw_spin_unlock_irqrestore(&cradle_connected_chain_lock, flags);
+    raw_spin_lock_irqsave(&cradle_notify_chain_lock, flags);
+    err = raw_notifier_chain_unregister(&cradle_notify_chain, nb);
+    raw_spin_unlock_irqrestore(&cradle_notify_chain_lock, flags);
 
     return err;
 }
 EXPORT_SYMBOL(cradle_unregister_notifier);
-*/
-/////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 static int wait_for_stable_signal(int pin, int interim)
 {
@@ -632,6 +620,7 @@ static void dock_switch_work_func_fix(struct work_struct *work)
         }
 		ds->state = val;
 		switch_set_state(&ds->sdev, val);
+        cradle_notify(ds->state != 0, 0);
 	}
 }
 
