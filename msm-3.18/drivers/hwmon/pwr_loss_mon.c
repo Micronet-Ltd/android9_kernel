@@ -40,10 +40,10 @@
 #include <linux/wakelock.h>
 #include <linux/hwmon.h>
 #include <linux/power_supply.h>
+#include <linux/delay.h>
 #if 0
 #include <linux/err.h>
 #include <linux/slab.h>
-#include <linux/delay.h>
 #include <linux/fcntl.h>
 //#include <linux/cpufreq.h>
 #endif
@@ -159,6 +159,38 @@ void enable_irq_safe(int irq, int en)
     }
 }
 
+// Vladimir
+// TODO: implement remount completing wait
+//
+
+extern int emergency_remount_register_notifier(struct notifier_block *nb);
+
+static void remount_ro(struct power_loss_monitor *pwrl)
+{
+    int fd, i = 0;
+
+    fd = emergency_remount_register_notifier(&pwrl->pwr_loss_mon_remount_notifier);
+    if (fd) {
+        pr_err("failure to register remount notifier [%d]\n", fd);
+        return;
+    }
+
+    fd = sys_open("/proc/sysrq-trigger", O_WRONLY, 0);
+    if (fd < 0) {
+        pr_notice("failure to open /proc/sysrq-trigger\n");
+        return;
+    }
+    sys_write(fd, "u", 1);
+    sys_close(fd);
+
+
+    while (!pwrl->remount_complete && (i++ < 40)) {
+        msleep(100);
+    }
+
+    return;
+}
+
 static void __ref pwr_loss_mon_work(struct work_struct *work)
 {
     int val, err, usb_online;
@@ -200,13 +232,14 @@ static void __ref pwr_loss_mon_work(struct work_struct *work)
             if (cpu_online(val))
                 continue;
 #if defined (CONFIG_SMP)
+            pr_notice("voting for cpu%d up", val);
             err = cpu_up(val);
             if (err && err == notifier_to_errno(NOTIFY_BAD))
-                pr_notice("up cpu%d is declined\n", val);
+                pr_notice(" is declined\n");
             else if (err)
-                pr_err("failure to up cpu%d. err:%d\n", val, err);
+                pr_err(" failure. err:%d\n", err);
             else
-                pr_notice("up cpu%d\n", val);
+                pr_notice("\n");
 #endif
         }
         adreno_suspend(pwrl, 0);
@@ -237,9 +270,12 @@ static void __ref pwr_loss_mon_work(struct work_struct *work)
             if (!cpu_online(val))
                 continue;
 #if defined (CONFIG_SMP)
+            pr_notice("voting for cpu%d down", val);
             err = cpu_down(val);
             if (err)
-                pr_err("Unable shutdown cpu%d [%d]\n", val, err);
+                pr_err(" is failure [%d]\n", err);
+            else
+                pr_notice( "\n");
 #endif
         }
         timer = (pwrl->pwr_lost_wan_d > ktime_to_ms(ktime_get()))?pwrl->pwr_lost_wan_d - ktime_to_ms(ktime_get()):0;
@@ -254,7 +290,7 @@ static void __ref pwr_loss_mon_work(struct work_struct *work)
         pr_notice("urgent remount block devices ro %lld\n", ktime_to_ms(ktime_get()));
 
         sys_sync();
-//        remount_ro(pwrl);
+        remount_ro(pwrl);
         pr_notice("urgent shutdown device %lld\n", ktime_to_ms(ktime_get()));
         orderly_poweroff(1);
         return;
@@ -293,42 +329,9 @@ static irqreturn_t pwr_loss_irq_handler(int irq, void *irq_data)
 	return IRQ_HANDLED;
 }
 
-#if 0
-// Vladimir
-// TODO: implement remount completing wait
-//
-
-extern int emergency_remount_register_notifier(struct notifier_block *nb);
-
-static void remount_ro(struct power_loss_monitor *pwrl)
+static int __ref pwr_loss_remount_callback(struct notifier_block *nfb, unsigned long a, void *arg)
 {
-    int fd, i = 0;
-
-    fd = emergency_remount_register_notifier(&pwrl->a8_power_lost_remount_notifier);
-    if (fd) {
-        pr_err("failure to register remount notifier [%d]\n", fd);
-        return;
-    }
-
-    fd = sys_open("/proc/sysrq-trigger", O_WRONLY, 0);
-    if (fd < 0) {
-        pr_notice("failure to open /proc/sysrq-trigger\n");
-        return;
-    }
-    sys_write(fd, "u", 1);
-    sys_close(fd);
-
-
-    while (!pwrl->remount_complete && (i++ < 40)) {
-        msleep(100);
-    }
-
-    return;
-}
-
-static int __ref a8_power_lost_remount_callback(struct notifier_block *nfb, unsigned long a, void *arg)
-{
-    struct power_loss_monitor *pwrl = container_of(nfb, struct power_loss_monitor, a8_power_lost_remount_notifier);
+    struct power_loss_monitor *pwrl = container_of(nfb, struct power_loss_monitor, pwr_loss_mon_remount_notifier);
 
     spin_lock_irqsave(&pwrl->pwr_lost_lock, pwrl->lock_flags);
     pwrl->remount_complete = (unsigned int)a;
@@ -337,19 +340,18 @@ static int __ref a8_power_lost_remount_callback(struct notifier_block *nfb, unsi
 
 	return NOTIFY_OK;
 }
-#endif
 
 static int __ref pwr_loss_cpu_callback(struct notifier_block *nfb, unsigned long a, void *pcpu)
 {
-	uint32_t cpu = (uintptr_t)pcpu;
+//	uint32_t cpu = (uintptr_t)pcpu;
     struct power_loss_monitor *pwrl = container_of(nfb, struct power_loss_monitor, pwr_loss_mon_cpu_notifier);
 
 	if (a == CPU_UP_PREPARE || a == CPU_UP_PREPARE_FROZEN) {
 		if (pwrl->pwr_lost_off_d != -1) {
-			pr_notice("prevent cpu%d up\n", cpu);
+			// pr_notice("prevent cpu%d up\n", cpu);
 			return NOTIFY_BAD;
 		}
-        pr_notice("voting for cpu%d up\n", cpu);
+        // pr_notice("voting for cpu%d up\n", cpu);
 	}
 
 	return NOTIFY_OK;
@@ -620,7 +622,7 @@ static int pwr_loss_mon_probe(struct platform_device *pdev)
     pwrl->pwr_lost_wan_d = pwrl->pwr_lost_wlan_d = pwrl->pwr_lost_off_d = -1;
 
     pwrl->pwr_loss_mon_cpu_notifier.notifier_call = pwr_loss_cpu_callback;
-//    pwrl->a8_power_lost_remount_notifier.notifier_call = a8_power_lost_remount_callback;
+    pwrl->pwr_loss_mon_remount_notifier.notifier_call = pwr_loss_remount_callback;
     pwrl->pwr_loss_mon_cradle_notifier.notifier_call = pwr_loss_cradle_callback;
     pwrl->pwr_loss_mon_vbus_notifier.notifier_call = pwr_loss_vbus_callback;
 
