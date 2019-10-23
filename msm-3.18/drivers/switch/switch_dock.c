@@ -31,6 +31,7 @@
 //#include <linux/cred.h>
 #include <linux/dirent.h>
 //#include <linux/string.h>
+#include "../misc/hi_3w/hi_3w.h"
 
 #if defined  (CONFIG_PRODUCT_TAB8_FIXED)
 extern int32_t gpio_in_register_notifier(struct notifier_block *nb);
@@ -537,7 +538,9 @@ static void dock_switch_work_func_fix(struct work_struct *work)
 {
 	struct dock_switch_device *ds  = container_of(work, struct dock_switch_device, work);
     int val = 0;
+    uint32_t cmd, fd;
     union power_supply_propval prop = {0,};
+    char ver[16];
 
     if (!ds->usb_psy) {
         pr_notice("usb power supply not ready %lld\n", ktime_to_ms(ktime_get()));
@@ -571,6 +574,12 @@ static void dock_switch_work_func_fix(struct work_struct *work)
 
         prop.intval = 0x0;
         power_supply_set_usb_otg(ds->usb_psy, prop.intval);
+        fd = sys_open("/proc/mcu_version", O_WRONLY, 0);
+        if (fd >= 0) {
+            sprintf(ver, "unknown");
+            sys_write(fd, ver, strlen(ver));
+            sys_close(fd);
+        }
     } else {
         pr_notice("stm32 attached %lld\n", ktime_to_ms(ktime_get()));
         prop.intval = 0x20;
@@ -587,6 +596,15 @@ static void dock_switch_work_func_fix(struct work_struct *work)
             val = (SWITCH_DOCK | SWITCH_ODOCK); 
         } else {
             val = (ds->state)?ds->state:SWITCH_DOCK | SWITCH_ODOCK;
+        }
+
+        cmd = 2<<24;
+        hi_3w_tx_cmd(&cmd, 1);
+        fd = sys_open("/proc/mcu_version", O_WRONLY, 0);
+        if (fd >= 0) {
+            sprintf(ver, "%d.%d.%d", (cmd >> 16) & 0xFF, (cmd >> 8) & 0xFF, cmd & 0xFF);
+            sys_write(fd, ver, strlen(ver));
+            sys_close(fd);
         }
     }
     mutex_unlock(&ds->lock);
