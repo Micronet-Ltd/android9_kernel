@@ -92,8 +92,27 @@
 		mcn,board-id-2 = <&tlmm 96 GPIO_ACTIVE_LOW>;
 		status = "okay";
 	};
-
+	pwr_loss_mon {
+		compatible = "mcn,pwr-loss-mon";
+		pinctrl-names = "pwr_loss_mon_active", "pwr_loss_mon_suspend";
+		pinctrl-0 = <&pwr_loss_mon_active>;
+		pinctrl-1 = <&pwr_loss_mon_suspend>;
+		mcn,pwr-loss-mon = <&tlmm 46 GPIO_ACTIVE_LOW>;
+		mcn,wan-off-delay = <0>;
+		mcn,wlan-off-delay = <0>;
+		mcn,plat-off-delay = <30000>;
+		interrupt-names = "pwr-loss";
+		interrupt-parent = <&tlmm>;
+		interrupts = <&tlmm 46 0>;
+		status = "okay";
+	};
 };
+
+&pm8953_rtc {
+	qcom,qpnp-rtc-write = <1>;
+	qcom,qpnp-rtc-alarm-pwrup = <1>;
+};
+
 /*
 &pm8953_typec {
 	qcom,role-reversal-supported;
