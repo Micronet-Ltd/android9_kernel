@@ -569,7 +569,9 @@ static int watchdog_pin_suspend(struct device *dev)
     spin_lock_irqsave(&wdi->rfkillpin_lock, wdi->lock_flags);
     wdi->reject_suspend = 0;
     wdi->awake_delay = 0;
-    wdi->suspend = 1;
+    if (wdi->suspend != -1) {
+        wdi->suspend = 1; 
+    }
     spin_unlock_irqrestore(&wdi->rfkillpin_lock, wdi->lock_flags);
 
     return 0;
@@ -582,7 +584,9 @@ static int watchdog_pin_resume(struct device *dev)
     if (gpio_is_valid(wdi->toggle_pin)) {
         pr_notice("restart toggling [%d] %lld\n", wdi->state, ktime_to_ms(ktime_get()));
         spin_lock_irqsave(&wdi->rfkillpin_lock, wdi->lock_flags);
-        wdi->suspend = 0;
+        if (wdi->suspend != -1) {
+            wdi->suspend = 0; 
+        }
         spin_unlock_irqrestore(&wdi->rfkillpin_lock, wdi->lock_flags);
 //        cancel_delayed_work(&wdi->toggle_work);
         schedule_delayed_work(&wdi->toggle_work, 0);	
@@ -619,7 +623,9 @@ static void watchdog_pin_complete(struct device *dev)
         spin_lock_irqsave(&wdi->rfkillpin_lock, wdi->lock_flags); 
         wdi->reject_suspend = 0;
         wdi->awake_delay = 0;
-        wdi->suspend = 0;
+        if (wdi->suspend != -1) {
+            wdi->suspend = 0; 
+        }
         wdi->awake_delay_max = 0;
 
         spin_unlock_irqrestore(&wdi->rfkillpin_lock, wdi->lock_flags);
