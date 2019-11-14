@@ -516,6 +516,44 @@ static int smbchg_read(struct smbchg_chip *chip, u8 *val,
 	return 0;
 }
 
+static RAW_NOTIFIER_HEAD(power_ok_notify_chain);
+static DEFINE_RAW_SPINLOCK(power_ok_notify_chain_lock);
+
+void power_ok_notify(unsigned long reason, void *arg)
+{
+    unsigned long flags;
+
+    raw_spin_lock_irqsave(&power_ok_notify_chain_lock, flags);
+    raw_notifier_call_chain(&power_ok_notify_chain, reason, 0);
+    raw_spin_unlock_irqrestore(&power_ok_notify_chain_lock, flags);
+}
+
+int power_ok_register_notifier(struct notifier_block *nb)
+{
+    unsigned long flags;
+    int err;
+
+    raw_spin_lock_irqsave(&power_ok_notify_chain_lock, flags);
+    err = raw_notifier_chain_register(&power_ok_notify_chain, nb);
+    raw_spin_unlock_irqrestore(&power_ok_notify_chain_lock, flags);
+
+    return err;
+}
+EXPORT_SYMBOL(power_ok_register_notifier);
+
+int power_ok_unregister_notifier(struct notifier_block *nb)
+{
+    unsigned long flags;
+    int err;
+
+    raw_spin_lock_irqsave(&power_ok_notify_chain_lock, flags);
+    err = raw_notifier_chain_unregister(&power_ok_notify_chain, nb);
+    raw_spin_unlock_irqrestore(&power_ok_notify_chain_lock, flags);
+
+    return err;
+}
+EXPORT_SYMBOL(power_ok_unregister_notifier);
+
 /*
  * Writes an arbitrary number of bytes to a specified register
  *
@@ -6815,6 +6853,8 @@ static irqreturn_t power_ok_handler(int irq, void *_chip)
 
 	smbchg_read(chip, &reg, chip->misc_base + RT_STS, 1);
 	pr_smb(PR_INTERRUPT, "triggered: 0x%02x\n", reg);
+	power_ok_notify(reg, 0);
+
 	return IRQ_HANDLED;
 }
 

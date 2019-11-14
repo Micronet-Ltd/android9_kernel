@@ -31,6 +31,7 @@
 //#include <linux/cred.h>
 #include <linux/dirent.h>
 //#include <linux/string.h>
+#include "../misc/hi_3w/hi_3w.h"
 
 #if defined  (CONFIG_PRODUCT_TAB8_FIXED)
 extern int32_t gpio_in_register_notifier(struct notifier_block *nb);
@@ -203,26 +204,16 @@ static ssize_t ampl_show(struct device *dev, struct device_attribute *attr, char
 
 static DEVICE_ATTR(ampl_enable, S_IRUGO|S_IWUSR|S_IWGRP, ampl_show, ampl_store);
 
-/////////////////////////////////////////////////////////////////////////////////////////////////
-/*
-static RAW_NOTIFIER_HEAD(cradle_connected_chain);
-static DEFINE_RAW_SPINLOCK(cradle_connected_chain_lock);
+static RAW_NOTIFIER_HEAD(cradle_notify_chain);
+static DEFINE_RAW_SPINLOCK(cradle_notify_chain_lock);
 
-enum NOTIFICATION_REASONS
-{
-    CONNETED_TO_BASIC_CRADLE = 1,
-    DISCONNECTED_FROM_BASIC_CRADLE = 2,
-    CONNETED_TO_SMART_CRADLE = 3,
-    DISCONNECTED_FROM_SMART_CRADLE = 4,
-};
-
-void cradle_connect_notify(unsigned long reason, void *arg)
+void cradle_notify(unsigned long reason, void *arg)
 {
     unsigned long flags;
 
-    raw_spin_lock_irqsave(&cradle_connected_chain_lock, flags);
-    raw_notifier_call_chain(&cradle_connected_chain, reason, 0);
-    raw_spin_unlock_irqrestore(&cradle_connected_chain_lock, flags);
+    raw_spin_lock_irqsave(&cradle_notify_chain_lock, flags);
+    raw_notifier_call_chain(&cradle_notify_chain, reason, 0);
+    raw_spin_unlock_irqrestore(&cradle_notify_chain_lock, flags);
 }
 
 int cradle_register_notifier(struct notifier_block *nb)
@@ -230,9 +221,9 @@ int cradle_register_notifier(struct notifier_block *nb)
     unsigned long flags;
     int err;
 
-    raw_spin_lock_irqsave(&cradle_connected_chain_lock, flags);
-    err = raw_notifier_chain_register(&cradle_connected_chain, nb);
-    raw_spin_unlock_irqrestore(&cradle_connected_chain_lock, flags);
+    raw_spin_lock_irqsave(&cradle_notify_chain_lock, flags);
+    err = raw_notifier_chain_register(&cradle_notify_chain, nb);
+    raw_spin_unlock_irqrestore(&cradle_notify_chain_lock, flags);
 
     return err;
 }
@@ -243,15 +234,13 @@ int cradle_unregister_notifier(struct notifier_block *nb)
     unsigned long flags;
     int err;
 
-    raw_spin_lock_irqsave(&cradle_connected_chain_lock, flags);
-    err = raw_notifier_chain_unregister(&cradle_connected_chain, nb);
-    raw_spin_unlock_irqrestore(&cradle_connected_chain_lock, flags);
+    raw_spin_lock_irqsave(&cradle_notify_chain_lock, flags);
+    err = raw_notifier_chain_unregister(&cradle_notify_chain, nb);
+    raw_spin_unlock_irqrestore(&cradle_notify_chain_lock, flags);
 
     return err;
 }
 EXPORT_SYMBOL(cradle_unregister_notifier);
-*/
-/////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 static int wait_for_stable_signal(int pin, int interim)
 {
@@ -549,7 +538,9 @@ static void dock_switch_work_func_fix(struct work_struct *work)
 {
 	struct dock_switch_device *ds  = container_of(work, struct dock_switch_device, work);
     int val = 0;
+    uint32_t cmd, fd;
     union power_supply_propval prop = {0,};
+    char ver[16];
 
     if (!ds->usb_psy) {
         pr_notice("usb power supply not ready %lld\n", ktime_to_ms(ktime_get()));
@@ -583,6 +574,12 @@ static void dock_switch_work_func_fix(struct work_struct *work)
 
         prop.intval = 0x0;
         power_supply_set_usb_otg(ds->usb_psy, prop.intval);
+        fd = sys_open("/proc/mcu_version", O_WRONLY, 0);
+        if (fd >= 0) {
+            sprintf(ver, "unknown");
+            sys_write(fd, ver, strlen(ver));
+            sys_close(fd);
+        }
     } else {
         pr_notice("stm32 attached %lld\n", ktime_to_ms(ktime_get()));
         prop.intval = 0x20;
@@ -599,6 +596,15 @@ static void dock_switch_work_func_fix(struct work_struct *work)
             val = (SWITCH_DOCK | SWITCH_ODOCK); 
         } else {
             val = (ds->state)?ds->state:SWITCH_DOCK | SWITCH_ODOCK;
+        }
+
+        cmd = 2<<24;
+        hi_3w_tx_cmd(&cmd, 1);
+        fd = sys_open("/proc/mcu_version", O_WRONLY, 0);
+        if (fd >= 0) {
+            sprintf(ver, "%d.%d.%d", (cmd >> 16) & 0xFF, (cmd >> 8) & 0xFF, cmd & 0xFF);
+            sys_write(fd, ver, strlen(ver));
+            sys_close(fd);
         }
     }
     mutex_unlock(&ds->lock);
@@ -632,6 +638,7 @@ static void dock_switch_work_func_fix(struct work_struct *work)
         }
 		ds->state = val;
 		switch_set_state(&ds->sdev, val);
+        cradle_notify(ds->state != 0, 0);
 	}
 }
 
