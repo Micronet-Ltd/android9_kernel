@@ -106,6 +106,10 @@
 		interrupts = <&tlmm 46 0>;
 		status = "okay";
 	};
+	fixed-vinputs {
+		compatible = "mcn,fixed-vinputs";
+		status = "okay";
+	};
 };
 
 &pm8953_rtc {
