@@ -443,7 +443,7 @@ static int watchdog_pin_probe(struct platform_device *op)
 
     spin_lock_init(&inf->rfkillpin_lock);
 	
-    inf->state = !inf->portable;
+    inf->state = 0;//!inf->portable;
     if (inf->high_delay == inf->low_delay) {
         inf->suspend = -1;
     } else {
