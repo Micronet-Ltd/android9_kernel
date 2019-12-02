@@ -17,6 +17,7 @@
 #include <linux/dirent.h>
 #include <linux/string.h>
 #include <linux/hwmon-sysfs.h>
+#include <linux/delay.h>
 #include "../../misc/hi_3w/hi_3w.h"//Michael Efimov: added
 
 #define VINPUTS_NAME	"vinputs"
@@ -225,68 +226,99 @@ static void vinputs_work_func(struct work_struct *work)
 }
 
 //***       Michael Efimov: added       ***//
+void choose_delay(unsigned int* del, unsigned int val_del, unsigned int* cnt, unsigned int val_cnt, unsigned int* mode, unsigned int* num, unsigned int clear_mode){
+    *del = val_del;
+    *cnt = val_cnt;
+    if (clear_mode) {
+        *mode = 0;
+        *num = 0;
+    }
+}
+
 static void cradle_is_connected_work_fix(struct work_struct *work){
-    uint32_t cmd = 0/*, inputs_status = 0*/;
-    uint32_t inp_val[2] = {0};
-    int temp_val = 0, sync = 0, /*number_chnl = 0,*/ cnt, strt_cnt, stp_cnt;
+    uint32_t cmd = 0, tx_cmd = 0;
+    static uint32_t inp_val[2] = {0}, /*inp_prev_val[2] = {0}*/  vinp_code[2] = {0};
+    unsigned int delay_val = 0;
+    static int status_changed = 1;
+    static int status_prev = 0;
+    static int status_curr = 3;
+    int cnt;
+    //static int stop_cnt = 0;
 
     struct virt_inputs *vinp = container_of(work, struct virt_inputs, virtual_input_init_work.work);
-    if (vinp->cradle_attached) {
-        strt_cnt = 0;
-        stp_cnt = 2;
-        /*hi_3w_tx_cmd(&cmd, 1);
-        if (cmd & 0x18) {
-            inputs_status = 1;
-            if ((cmd & 0x18) == 0x08) {
-                stp_cnt = 1;
-                number_chnl = 2;
-                pr_notice("first chnl %x\n", (cmd & 0x18)); //Michael Efimov: added for test
+    
+    if (status_changed) {
+        /*cmd = 0x28;
+        if ((status_curr ^ status_prev) & 1) {
+            //msleep(10);
+            tx_cmd = cmd;
+            tx_cmd<<=24;
+            hi_3w_tx_cmd(&tx_cmd, 1);
+            inp_val[0] = tx_cmd;
+            inp_val[0] &=~(0xFF000000);
+            if (inp_val[0]>65535) {
+                inp_val[0] = 0;
             }
-            if ((cmd & 0x18) == 0x10) {
-                strt_cnt = 1;
-                number_chnl = 1;
-                pr_notice("second chnl %x\n", (cmd & 0x18));//Michael Efimov: added for test
+            vinp_code[0] = (inp_val[0] > 7000) ? KEY_F1 : 0;
+            input_report_abs(vinp->input_dev, vinp->vmap[0].code, vinp_code[0]);   
+            vinp->vmap[0].val = vinp_code[0];
+        }
+
+        if ((status_curr ^ status_prev) & 2) {
+            //msleep(10);
+            cmd |= 4;
+            tx_cmd = cmd;
+            tx_cmd<<=24;
+            hi_3w_tx_cmd(&tx_cmd, 1);
+            inp_val[1] = tx_cmd;
+            inp_val[1] &=~(0xFF000000);
+            if (inp_val[1]>65535) {
+                inp_val[1] = 0;
             }
-            if ((cmd & 0x18) == 0x18) {
-                pr_notice("both chnls %x\n", (cmd & 0x18));//Michael Efimov: added for test
-            }
-            if (number_chnl) {
-                temp_val = 0;
-                if (vinp->vmap[number_chnl - 1].val != temp_val) {
-                    input_report_abs(vinp->input_dev, vinp->vmap[number_chnl - 1].code, temp_val);
-                    vinp->vmap[number_chnl - 1].val = temp_val;
-                    pr_notice("value key%d-%d\n",cnt+1 , inp_val[number_chnl - 1]);//Michael Efimov: added for test
-                    sync = 1;
-                }
-            }
+            vinp_code[1] = (inp_val[1] > 7000)?KEY_F2:0;
+            input_report_abs(vinp->input_dev, vinp->vmap[1].code, vinp_code[1]);
+            vinp->vmap[1].val = vinp_code[1];
         }*/
-        for (cnt = strt_cnt; cnt < stp_cnt; cnt++) {
-            //if (inputs_status) {
-                cmd = cnt << 2;
-                cmd|=0x28;
-                cmd<<=24;
-                pr_notice("request command%d %x\n", (cnt+1), cmd);//Michael Efimov: added for test
-                hi_3w_tx_cmd(&cmd, 1);
-                pr_notice("responce command%d %x\n", (cnt+1), cmd);//Michael Efimov: added for test
-                inp_val[cnt] = cmd;
+        for (cnt = 0; cnt<2; cnt++) {
+            tx_cmd = cnt<<2;
+            tx_cmd |=0x28;
+            tx_cmd<<=24;
+            if ((status_curr ^ status_prev) & (cnt+1)) {
+                pr_notice("request status%x\n", tx_cmd);//Michael Efimov: added for test
+                hi_3w_tx_cmd(&tx_cmd, 1);
+                inp_val[cnt] = tx_cmd;
                 inp_val[cnt] &=~(0xFF000000);
-                pr_notice("value%d-%d\n",cnt+1 , inp_val[cnt]);//Michael Efimov: added for test
-                temp_val = (inp_val[cnt]>6000) ? (KEY_F1 + cnt) : 0;
-            //}
-            if (vinp->vmap[cnt].val!=temp_val) {
-                input_report_abs(vinp->input_dev, vinp->vmap[cnt].code, temp_val);
-                vinp->vmap[cnt].val = temp_val;
-                pr_notice("value key%d-%d\n",cnt+1 , inp_val[cnt]);//Michael Efimov: added for test
-                sync = 1;
+                if (inp_val[cnt]>65535) {
+                    inp_val[cnt] = 0;
+                }
+                vinp_code[cnt] = (inp_val[cnt] > 7000)?(KEY_F1 + cnt):0;
+                input_report_abs(vinp->input_dev, vinp->vmap[cnt].code, vinp_code[cnt]);
+                vinp->vmap[cnt].val = vinp_code[cnt];
+                pr_notice("input%d:code-%d, code in file-%d, voltage-%d\n", cnt, vinp->vmap[cnt].code, vinp->vmap[cnt].val, inp_val[cnt]);//Michael Efimov: added for test
             }
         }
-        if (sync) {
-            input_sync(vinp->input_dev);
-            pr_notice("was sinchroniced\n");//Michael Efimov: added for test
+        input_sync(vinp->input_dev);
+
+        status_prev = status_curr;
+        status_changed = 0;
+        //msleep(10);
+    }
+
+    if (vinp->cradle_attached) {
+        pr_notice("input1 - %d, input2 - %d\n",inp_val[0], inp_val[1]);//Michael Efimov: added for test
+        cmd = 0;
+        //pr_notice("request status%x\n", cmd);//Michael Efimov: added for test
+        hi_3w_tx_cmd(&cmd, 1);
+        status_curr = (cmd & 0x18) >> 3;
+        if (status_curr != status_prev) {
+            status_changed = 1;
+            delay_val = 0;
+            pr_notice("state was changed\n");//Michael Efimov: added for test
+        } else {
+            delay_val = 1000;
         }
-        pr_notice("responce command1 %d\n", inp_val[0]);//Michael Efimov: added for test
-        pr_notice("responce command2 %d\n", inp_val[1]);//Michael Efimov: added for test
-        schedule_delayed_work(&vdev->virtual_input_init_work, msecs_to_jiffies(1000));
+        //pr_notice("responce status%x\n", cmd);//Michael Efimov: added for test
+        schedule_delayed_work(&vdev->virtual_input_init_work, delay_val?msecs_to_jiffies(delay_val/*1000*/):0);
     }
 }
 //****************************************//
