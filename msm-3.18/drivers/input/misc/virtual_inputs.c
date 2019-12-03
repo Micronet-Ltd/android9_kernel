@@ -226,14 +226,14 @@ static void vinputs_work_func(struct work_struct *work)
 }
 
 //***       Michael Efimov: added       ***//
-void choose_delay(unsigned int* del, unsigned int val_del, unsigned int* cnt, unsigned int val_cnt, unsigned int* mode, unsigned int* num, unsigned int clear_mode){
+/*void choose_delay(unsigned int* del, unsigned int val_del, unsigned int* cnt, unsigned int val_cnt, unsigned int* mode, unsigned int* num, unsigned int clear_mode){
     *del = val_del;
     *cnt = val_cnt;
     if (clear_mode) {
         *mode = 0;
         *num = 0;
     }
-}
+}*/
 
 static void cradle_is_connected_work_fix(struct work_struct *work){
     uint32_t cmd = 0, tx_cmd = 0;
@@ -284,7 +284,7 @@ static void cradle_is_connected_work_fix(struct work_struct *work){
             tx_cmd |=0x28;
             tx_cmd<<=24;
             if ((status_curr ^ status_prev) & (cnt+1)) {
-                pr_notice("request status%x\n", tx_cmd);//Michael Efimov: added for test
+                //pr_notice("request status%x\n", tx_cmd);//Michael Efimov: added for test
                 hi_3w_tx_cmd(&tx_cmd, 1);
                 inp_val[cnt] = tx_cmd;
                 inp_val[cnt] &=~(0xFF000000);
@@ -294,7 +294,7 @@ static void cradle_is_connected_work_fix(struct work_struct *work){
                 vinp_code[cnt] = (inp_val[cnt] > 7000)?(KEY_F1 + cnt):0;
                 input_report_abs(vinp->input_dev, vinp->vmap[cnt].code, vinp_code[cnt]);
                 vinp->vmap[cnt].val = vinp_code[cnt];
-                pr_notice("input%d:code-%d, code in file-%d, voltage-%d\n", cnt, vinp->vmap[cnt].code, vinp->vmap[cnt].val, inp_val[cnt]);//Michael Efimov: added for test
+                //pr_notice("input%d:code-%d, code in file-%d, voltage-%d\n", cnt, vinp->vmap[cnt].code, vinp->vmap[cnt].val, inp_val[cnt]);//Michael Efimov: added for test
             }
         }
         input_sync(vinp->input_dev);
@@ -305,7 +305,7 @@ static void cradle_is_connected_work_fix(struct work_struct *work){
     }
 
     if (vinp->cradle_attached) {
-        pr_notice("input1 - %d, input2 - %d\n",inp_val[0], inp_val[1]);//Michael Efimov: added for test
+        //pr_notice("input1 - %d, input2 - %d\n",inp_val[0], inp_val[1]);//Michael Efimov: added for test
         cmd = 0;
         //pr_notice("request status%x\n", cmd);//Michael Efimov: added for test
         hi_3w_tx_cmd(&cmd, 1);
@@ -313,7 +313,7 @@ static void cradle_is_connected_work_fix(struct work_struct *work){
         if (status_curr != status_prev) {
             status_changed = 1;
             delay_val = 0;
-            pr_notice("state was changed\n");//Michael Efimov: added for test
+            //pr_notice("state was changed\n");//Michael Efimov: added for test
         } else {
             delay_val = 1000;
         }
