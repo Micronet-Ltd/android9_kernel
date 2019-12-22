@@ -69,8 +69,8 @@
 };
 
 &mdss_dsi0 {
-	//lab-supply = <&lab_regulator>;
-	//ibb-supply = <&ibb_regulator>;
+	/*lab-supply = <&lab_regulator>;
+	ibb-supply = <&ibb_regulator>;*/
 	/delete-property/ vdd-supply;
 
 	qcom,dsi-pref-prim-pan = <&dsi_nt35521_BYD_video>;

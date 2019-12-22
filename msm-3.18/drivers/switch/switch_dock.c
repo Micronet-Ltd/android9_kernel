@@ -541,6 +541,8 @@ static void dock_switch_work_func_fix(struct work_struct *work)
     uint32_t cmd, fd;
     union power_supply_propval prop = {0,};
     char ver[16];
+    int transmit_err = -3;
+    int err_cnt = 0;
 
     if (!ds->usb_psy) {
         pr_notice("usb power supply not ready %lld\n", ktime_to_ms(ktime_get()));
@@ -577,6 +579,7 @@ static void dock_switch_work_func_fix(struct work_struct *work)
         fd = sys_open("/proc/mcu_version", O_WRONLY, 0);
         if (fd >= 0) {
             sprintf(ver, "unknown");
+            pr_notice("stm32 detached %s\n", ver);
             sys_write(fd, ver, strlen(ver));
             sys_close(fd);
         }
@@ -588,7 +591,7 @@ static void dock_switch_work_func_fix(struct work_struct *work)
         if (val > SC_IG_HI) {
             pr_notice("freq to high ignition off %lld\n", ktime_to_ms(ktime_get()));
             val = (SWITCH_DOCK | SWITCH_ODOCK); 
-        } else if (val > (SC_IG_HI - SC_IG_HI/6)) {
+        } else if (val > (SC_IG_HI - SC_IG_HI/4)) {
             pr_notice("ignition on %lld\n", ktime_to_ms(ktime_get()));
             val = (SWITCH_DOCK | SWITCH_ODOCK | SWITCH_IGN); 
         } else if (val > 1 && (val < SC_IG_LOW)) {
@@ -597,12 +600,27 @@ static void dock_switch_work_func_fix(struct work_struct *work)
         } else {
             val = (ds->state)?ds->state:SWITCH_DOCK | SWITCH_ODOCK;
         }
-
+        cmd = 0;
         cmd = 2<<24;
-        hi_3w_tx_cmd(&cmd, 1);
+        pr_notice("request %x\n", (cmd));
+        transmit_err = hi_3w_tx_cmd(&cmd, 1);
+        pr_notice("answere %x\n", (cmd & 0xFF000000));
+        while (transmit_err) {
+            pr_notice("transmit error %d\n", transmit_err);
+            cmd = 0;
+            cmd = 2<<24;
+            msleep(10);
+            transmit_err = hi_3w_tx_cmd(&cmd, 1);
+            if (++err_cnt>=15) {
+                err_cnt = 0;
+                break;
+            }
+        }
+        pr_notice("transmit is ok\n");
         fd = sys_open("/proc/mcu_version", O_WRONLY, 0);
         if (fd >= 0) {
             sprintf(ver, "%d.%d.%d", (cmd >> 16) & 0xFF, (cmd >> 8) & 0xFF, cmd & 0xFF);
+            pr_notice("stm32 sw ver %s\n", ver);
             sys_write(fd, ver, strlen(ver));
             sys_close(fd);
         }
