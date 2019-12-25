@@ -232,7 +232,7 @@ static void cradle_is_connected_work_fix(struct work_struct *work){
     static int status_curr = 3;
     int cnt;
     int transmit_err;
-    int err_cnt = 0;
+    //int err_cnt = 0;
 
     struct virt_inputs *vinp = container_of(work, struct virt_inputs, virtual_input_init_work.work);
     
@@ -246,7 +246,7 @@ static void cradle_is_connected_work_fix(struct work_struct *work){
                 if (vinp->cradle_attached) {
                     msleep(20);
                     transmit_err = hi_3w_tx_cmd(&tx_cmd, 1);
-                    while (transmit_err) {
+                    /*while (transmit_err) {
                         pr_notice("transmit for input chnl-%d error %d\n", cnt, transmit_err);
                         tx_cmd = 0;
                         tx_cmd = cnt<<2;
@@ -258,7 +258,7 @@ static void cradle_is_connected_work_fix(struct work_struct *work){
                             err_cnt = 0;
                             break;
                         }
-                    }
+                    }*/
                     inp_val[cnt] = tx_cmd;
                     inp_val[cnt] &=~(0xFF000000);
                     if (inp_val[cnt]>65535) {

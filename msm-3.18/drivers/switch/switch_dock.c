@@ -585,9 +585,6 @@ static void dock_switch_work_func_fix(struct work_struct *work)
         }
     } else {
         pr_notice("stm32 attached %lld\n", ktime_to_ms(ktime_get()));
-        prop.intval = 0x20;
-        power_supply_set_usb_otg(ds->usb_psy, prop.intval);
-        power_supply_set_current_limit(ds->usb_psy, 1500*1000);
         if (val > SC_IG_HI) {
             pr_notice("freq to high ignition off %lld\n", ktime_to_ms(ktime_get()));
             val = (SWITCH_DOCK | SWITCH_ODOCK); 
@@ -604,7 +601,7 @@ static void dock_switch_work_func_fix(struct work_struct *work)
         cmd = 2<<24;
         pr_notice("request %x\n", (cmd));
         transmit_err = hi_3w_tx_cmd(&cmd, 1);
-        pr_notice("answere %x\n", (cmd & 0xFF000000));
+        pr_notice("answere %x\n", (cmd & 0x00FFFFFF));
         while (transmit_err) {
             pr_notice("transmit error %d\n", transmit_err);
             cmd = 0;
@@ -624,6 +621,9 @@ static void dock_switch_work_func_fix(struct work_struct *work)
             sys_write(fd, ver, strlen(ver));
             sys_close(fd);
         }
+        prop.intval = 0x20;
+        power_supply_set_usb_otg(ds->usb_psy, prop.intval);
+        power_supply_set_current_limit(ds->usb_psy, 1500*1000);
     }
     mutex_unlock(&ds->lock);
 
