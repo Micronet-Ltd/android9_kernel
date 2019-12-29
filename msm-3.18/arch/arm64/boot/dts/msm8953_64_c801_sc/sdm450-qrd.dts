@@ -106,6 +106,19 @@
 		interrupts = <&tlmm 46 0>;
 		status = "okay";
 	};
+	fixed-vinputs {
+		compatible = "mcn,fixed-vinputs";
+		status = "okay";
+	};
+	gpio_keys {
+		user_btn {
+			label = "F24";
+			gpios = <&tlmm 25 0x1>;
+			linux,input-type = <1>;
+			linux,code = <194>;
+			debounce-interval = <15>;
+		};
+	};
 };
 
 &pm8953_rtc {
