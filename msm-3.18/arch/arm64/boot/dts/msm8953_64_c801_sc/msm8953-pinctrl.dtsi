@@ -1456,12 +1456,12 @@
 		tlmm_gpio_key {
 			gpio_key_active: gpio_key_active {
 				mux {
-					pins = "gpio85", "gpio86", "gpio87", "gpio59";
+					pins = "gpio25", "gpio85", "gpio86", "gpio87", "gpio59";
 					function = "gpio";
 				};
 
 				config {
-					pins = "gpio85", "gpio86", "gpio87", "gpio59";
+					pins = "gpio25", "gpio85", "gpio86", "gpio87", "gpio59";
 					drive-strength = <2>;
 					bias-pull-up;
 				};
@@ -1469,12 +1469,12 @@
 
 			gpio_key_suspend: gpio_key_suspend {
 				mux {
-					pins = "gpio85", "gpio86", "gpio87", "gpio59";
+					pins = "gpio25", "gpio85", "gpio86", "gpio87", "gpio59";
 					function = "gpio";
 				};
 
 				config {
-					pins = "gpio85", "gpio86", "gpio87", "gpio59";
+					pins = "gpio25", "gpio85", "gpio86", "gpio87", "gpio59";
 					drive-strength = <2>;
 					bias-pull-up;
 				};
@@ -1814,7 +1814,7 @@ cradle connectivety
 
 				config {
 					pins = "gpio7", "gpio13", "gpio22";
-					drive-strength = <2>;
+					drive-strength = <16>;
 					bias-pull-up;
 				};
 			};

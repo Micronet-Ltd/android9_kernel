@@ -100,11 +100,24 @@
 		mcn,pwr-loss-mon = <&tlmm 46 GPIO_ACTIVE_LOW>;
 		mcn,wan-off-delay = <0>;
 		mcn,wlan-off-delay = <0>;
-		mcn,plat-off-delay = <30000>;
+		mcn,plat-off-delay = <180000>;
 		interrupt-names = "pwr-loss";
 		interrupt-parent = <&tlmm>;
 		interrupts = <&tlmm 46 0>;
 		status = "okay";
+	};
+	fixed-vinputs {
+		compatible = "mcn,fixed-vinputs";
+		status = "okay";
+	};
+	gpio_keys {
+		user_btn {
+			label = "F24";
+			gpios = <&tlmm 25 0x1>;
+			linux,input-type = <1>;
+			linux,code = <194>;
+			debounce-interval = <15>;
+		};
 	};
 };
 
