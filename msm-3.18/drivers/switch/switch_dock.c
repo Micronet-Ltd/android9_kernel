@@ -531,6 +531,7 @@ static void dock_switch_work_func(struct work_struct *work)
 	}
 }
 
+#define SC_BAS_HI   1800
 #define SC_IG_HI    110
 #define SC_IG_LOW   55
 
@@ -563,7 +564,8 @@ static void dock_switch_work_func_fix(struct work_struct *work)
 
     if (ds->dock_active_l == gpio_get_value(ds->dock_pin) && val < 2) {
         val = 0; //&= ~(SWITCH_IGN | SWITCH_DOCK | SWITCH_ODOCK);
-        pr_notice("stm32 detached %lld\n", ktime_to_ms(ktime_get()));
+        ds->dock_type = e_dock_type_unspecified;
+        pr_notice("stm32/k20 detached %lld\n", ktime_to_ms(ktime_get()));
         if (gpio_is_valid(ds->usb_switch_pin)) {
             pr_notice("switch usb to type-c connector %lld\n", ktime_to_ms(ktime_get()));
             gpio_set_value(ds->usb_switch_pin, !ds->usb_switch_l);
@@ -584,44 +586,68 @@ static void dock_switch_work_func_fix(struct work_struct *work)
             sys_close(fd);
         }
     } else {
-        pr_notice("stm32 attached %lld\n", ktime_to_ms(ktime_get()));
-        if (val > SC_IG_HI) {
+        pr_notice("stm32/k20 attached %lld\n", ktime_to_ms(ktime_get()));
+        if (val > SC_BAS_HI) {
+            pr_notice("k20 start patern %lld\n", ktime_to_ms(ktime_get()));
+            val = (SWITCH_DOCK | SWITCH_EDOCK);
+            ds->dock_type = e_dock_type_smart;
+        } else if (val > SC_IG_HI) {
             pr_notice("freq to high ignition off %lld\n", ktime_to_ms(ktime_get()));
             val = (SWITCH_DOCK | SWITCH_ODOCK); 
+            ds->dock_type = e_dock_type_basic;
         } else if (val > (SC_IG_HI - SC_IG_HI/4)) {
             pr_notice("ignition on %lld\n", ktime_to_ms(ktime_get()));
-            val = (SWITCH_DOCK | SWITCH_ODOCK | SWITCH_IGN); 
+            val = (SWITCH_DOCK | SWITCH_IGN);
+            if (e_dock_type_smart == ds->dock_type) {
+                val |= SWITCH_EDOCK;
+            } else {
+                val |= SWITCH_ODOCK;
+            }
         } else if (val > 1 && (val < SC_IG_LOW)) {
             pr_notice("ignition off %lld\n", ktime_to_ms(ktime_get()));
-            val = (SWITCH_DOCK | SWITCH_ODOCK); 
-        } else {
-            val = (ds->state)?ds->state:SWITCH_DOCK | SWITCH_ODOCK;
-        }
-        cmd = 0;
-        cmd = 2<<24;
-        pr_notice("request %x\n", (cmd));
-        transmit_err = hi_3w_tx_cmd(&cmd, 1);
-        pr_notice("answere %x\n", (cmd & 0x00FFFFFF));
-        while (transmit_err) {
-            pr_notice("transmit error %d\n", transmit_err);
-            cmd = 0;
-            cmd = 2<<24;
-            msleep(10);
-            transmit_err = hi_3w_tx_cmd(&cmd, 1);
-            if (++err_cnt>=15) {
-                err_cnt = 0;
-                break;
+            val = SWITCH_DOCK; 
+            if (e_dock_type_smart == ds->dock_type) {
+                val |= SWITCH_EDOCK;
+            } else {
+                val |= SWITCH_ODOCK;
             }
+        } else {
+            if (e_dock_type_smart == ds->dock_type) {
+                val = SWITCH_EDOCK;
+            } else {
+                val = SWITCH_ODOCK;
+            }
+            val = (ds->state)?ds->state:SWITCH_DOCK | val;
         }
-        pr_notice("transmit is ok\n");
-        fd = sys_open("/proc/mcu_version", O_WRONLY, 0);
-        if (fd >= 0) {
-            sprintf(ver, "%d.%d.%d", (cmd >> 16) & 0xFF, (cmd >> 8) & 0xFF, cmd & 0xFF);
-            pr_notice("stm32 sw ver %s\n", ver);
-            sys_write(fd, ver, strlen(ver));
-            sys_close(fd);
+        if (0 == (val & SWITCH_EDOCK)) {
+            cmd = 0; 
+            cmd = 2<<24;
+            pr_notice("request %x\n", (cmd));
+            transmit_err = hi_3w_tx_cmd(&cmd, 1);
+            pr_notice("answere %x\n", (cmd & 0x00FFFFFF));
+            while (transmit_err) {
+                pr_notice("transmit error %d\n", transmit_err);
+                cmd = 0;
+                cmd = 2<<24;
+                msleep(10);
+                transmit_err = hi_3w_tx_cmd(&cmd, 1);
+                if (++err_cnt>=15) {
+                    err_cnt = 0;
+                    break;
+                }
+            }
+            pr_notice("transmit is ok\n");
+            fd = sys_open("/proc/mcu_version", O_WRONLY, 0);
+            if (fd >= 0) {
+                sprintf(ver, "%d.%d.%d", (cmd >> 16) & 0xFF, (cmd >> 8) & 0xFF, cmd & 0xFF);
+                pr_notice("stm32 sw ver %s\n", ver);
+                sys_write(fd, ver, strlen(ver));
+                sys_close(fd);
+            }
+            prop.intval = 0x20;
+        } else {
+            prop.intval = 0x11;
         }
-        prop.intval = 0x20;
         power_supply_set_usb_otg(ds->usb_psy, prop.intval);
         power_supply_set_current_limit(ds->usb_psy, 1500*1000);
     }
@@ -656,7 +682,9 @@ static void dock_switch_work_func_fix(struct work_struct *work)
         }
 		ds->state = val;
 		switch_set_state(&ds->sdev, val);
-        cradle_notify(ds->state != 0, 0);
+        if (0 == (val & SWITCH_EDOCK)) {
+            cradle_notify(ds->state != 0, 0);
+        }
 	}
 }
 
