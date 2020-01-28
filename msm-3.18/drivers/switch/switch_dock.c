@@ -666,7 +666,7 @@ static void dock_switch_work_func_fix(struct work_struct *work)
 
     if (ds->state != val) {
         pr_notice("dock state changed to %d\n", val);
-        if (val & SWITCH_ODOCK) {
+        if ((val & SWITCH_ODOCK)||(val & SWITCH_EDOCK)) {
             wake_lock(&ds->wlock);
             if (gpio_is_valid(ds->usb_switch_pin)) {
                 pr_notice("switch usb 44-pin connector %lld\n", ktime_to_ms(ktime_get()));
