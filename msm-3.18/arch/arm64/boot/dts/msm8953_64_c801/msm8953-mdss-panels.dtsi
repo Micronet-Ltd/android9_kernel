@@ -26,6 +26,7 @@
 #include "dsi-panel-lgd-incell-sw49106-fhd-video.dtsi"
 #include "dsi-panel-hx83100a-800p-video.dtsi"
 #include "dsi-panel-jd9366-video.dtsi"
+#include "dsi-panel-jd9366-new-video.dtsi"
 #include "dsi-panel-nt35521-BYD-video.dtsi"
 
 &soc {
@@ -151,4 +152,11 @@
 		31 2A 11 14 0D 03 04 a0
 		31 2A 11 14 0D 03 04 a0
 		31 3E 11 14 0D 03 04 a0];
+};
+&dsi_jd9366_video {
+	qcom,mdss-dsi-panel-timings-phy-v2 = [1e 1b 04 05 02 03 04 a0
+		1e 1b 04 05 02 03 04 a0
+		1e 1b 04 05 02 03 04 a0
+		1e 1b 04 05 02 03 04 a0
+		1e 0d 03 05 02 03 04 a0];
 };
