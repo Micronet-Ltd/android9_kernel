@@ -270,8 +270,8 @@
 			regulator-min-microvolt = <1750000>;
 			regulator-max-microvolt = <3225000>;
 			qcom,init-voltage = <3225000>;
-			/*qcom,use-voltage-level;*/
-			qcom,always-send-voltage;
+			qcom,use-voltage-level;
+			/*qcom,always-send-voltage;*/
 			status = "okay";
 		};
 	};
