@@ -16,6 +16,8 @@
  *
  */
 
+#define pr_fmt(fmt) "%s %s: " fmt, KBUILD_MODNAME, __func__
+
 #include <linux/cpu.h>
 #include <linux/cpumask.h>
 #include <linux/cpufreq.h>

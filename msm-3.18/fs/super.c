@@ -20,6 +20,7 @@
  *  Heavily rewritten for 'one fs - one tree' dcache architecture. AV, Mar 2000
  */
 
+#define pr_fmt(fmt) "%s %s: " fmt, KBUILD_MODNAME, __func__
 #include <linux/export.h>
 #include <linux/slab.h>
 #include <linux/blkdev.h>
