@@ -7,6 +7,7 @@
 #include <linux/miscdevice.h>
 #include <linux/notifier.h>
 #include <linux/gpio.h>
+#include <linux/of.h>
 
 #include <linux/syscalls.h>
 #include <linux/file.h>
@@ -14,11 +15,14 @@
 #include <linux/dirent.h>
 #include <linux/string.h>
 #include <linux/hwmon-sysfs.h>
+#include <linux/delay.h>
+#include "../../misc/hi_3w/hi_3w.h"
 
 #define VINPUTS_NAME	"vinputs"
 #define	FIND_NAME 		"vgpio_in"
 
 extern int32_t gpio_in_register_notifier(struct notifier_block *nb);
+extern int cradle_register_notifier(struct notifier_block *nb);
 
 struct gpio_set {
 	int base;
@@ -57,11 +61,14 @@ struct virt_inputs {
 	struct 	miscdevice*	mdev;
 	struct 	input_dev* 	input_dev;
 	struct  work_struct work;
+    struct  delayed_work    virtual_input_init_work;
+    struct  notifier_block virtual_inputs_cradle_notifier;
 	struct 	work_params wparams; 
 	struct 	vinput_key* vmap;
 	struct	gpio_set 	gpios_in;
 	struct 	notifier_block   notifier;
 	int		reinit;
+    int     cradle_attached;
     struct mutex lock;
 };
 
@@ -216,6 +223,83 @@ static void vinputs_work_func(struct work_struct *work)
 	}
 }
 
+static void cradle_is_connected_work_fix(struct work_struct *work){
+    uint32_t cmd = 0, tx_cmd = 0;
+    static uint32_t inp_val[2] = {0}, vinp_code[2] = {0};
+    unsigned int delay_val = 0;
+    static int status_changed = 1;
+    static int status_prev = 0;
+    static int status_curr = 3;
+    int cnt;
+    int transmit_err;
+    //int err_cnt = 0;
+
+    struct virt_inputs *vinp = container_of(work, struct virt_inputs, virtual_input_init_work.work);
+    
+    if (status_changed) {
+        for (cnt = 0; cnt<2; cnt++) {
+            tx_cmd = cnt<<2;
+            tx_cmd |=0x28;
+            tx_cmd<<=24;
+            if ((status_curr ^ status_prev) & (cnt+1)) {
+                //pr_notice("request status%x\n", tx_cmd);
+                if (vinp->cradle_attached) {
+                    msleep(20);
+                    transmit_err = hi_3w_tx_cmd(&tx_cmd, 1);
+                    /*while (transmit_err) {
+                        pr_notice("transmit for input chnl-%d error %d\n", cnt, transmit_err);
+                        tx_cmd = 0;
+                        tx_cmd = cnt<<2;
+                        tx_cmd |=0x28;
+                        tx_cmd<<=24;
+                        msleep(20);
+                        transmit_err = hi_3w_tx_cmd(&tx_cmd, 1);
+                        if (++err_cnt>=15) {
+                            err_cnt = 0;
+                            break;
+                        }
+                    }*/
+                    inp_val[cnt] = tx_cmd;
+                    inp_val[cnt] &=~(0xFF000000);
+                    if (inp_val[cnt]>65535) {
+                        pr_notice("voltage-%d of chnl-%d\n", inp_val[cnt], cnt);
+                        inp_val[cnt] = 0;
+                        pr_notice("was reset to 0 chnl-%d\n", cnt);
+                    }
+                } else {
+                    inp_val[cnt] = 0;
+                }
+                vinp_code[cnt] = (inp_val[cnt] > 7000)?(KEY_F1 + cnt):0;
+                input_report_abs(vinp->input_dev, vinp->vmap[cnt].code, vinp_code[cnt]);
+                vinp->vmap[cnt].val = vinp_code[cnt];
+                //pr_notice("input%d:code-%d, code in file-%d, voltage-%d\n", cnt, vinp->vmap[cnt].code, vinp->vmap[cnt].val, inp_val[cnt]);
+            }
+        }
+        input_sync(vinp->input_dev);
+
+        status_prev = status_curr;
+        status_changed = 0;
+        msleep(30);
+    }
+
+    if (vinp->cradle_attached) {
+        //pr_notice("input1 - %d, input2 - %d\n",inp_val[0], inp_val[1]);
+        cmd = 0;
+        //pr_notice("request status%x\n", cmd);
+        hi_3w_tx_cmd(&cmd, 1);
+        status_curr = (cmd & 0x18) >> 3;
+        if (status_curr != status_prev) {
+            status_changed = 1;
+            delay_val = 0;
+            //pr_notice("status was changed from %d to %d\n",status_prev, status_curr);
+        } else {
+            delay_val = 1000;
+        }
+        //pr_notice("responce status%x\n", cmd);
+        schedule_delayed_work(&vdev->virtual_input_init_work, delay_val?msecs_to_jiffies(delay_val):0);
+    }
+}
+
 static int32_t __ref vinputs_callback(struct notifier_block *nfb, unsigned long reason, void *arg)
 {
     struct virt_inputs *vinp = container_of(nfb, struct virt_inputs, notifier);
@@ -233,6 +317,20 @@ static int32_t __ref vinputs_callback(struct notifier_block *nfb, unsigned long 
     }
 
     return NOTIFY_OK;
+}
+
+static int __ref virtual_inputs_cradle_callback(struct notifier_block *nfb, unsigned long reason, void *p)
+{
+    struct virt_inputs *vinputs = container_of(nfb, struct virt_inputs, virtual_inputs_cradle_notifier);
+
+    vinputs->cradle_attached = reason;
+    if (vinputs->cradle_attached) {
+        cancel_delayed_work(&vdev->virtual_input_init_work);
+        schedule_delayed_work(&vdev->virtual_input_init_work, 0);
+    }else{
+        cancel_delayed_work(&vdev->virtual_input_init_work);
+    }
+	return NOTIFY_OK;
 }
 
 static int vinputs_open(struct inode *inode, struct file *file)
@@ -508,8 +606,15 @@ static int vinputs_create_input_dev(struct virt_inputs* vdev)
 static int __init virtual_inputs_init(void)
 {
 	int error;
+    int fixed_mode = 0;
 	struct device *dev;
+    struct device_node *np;
 
+    np = of_find_compatible_node(NULL, NULL, "mcn,fixed-vinputs");
+    if (np) {
+        fixed_mode = 1;
+        pr_err("node is finded\n");
+    }
 	pr_info("%s:+\n", __func__);
 	vdev = kzalloc(sizeof(struct virt_inputs), GFP_KERNEL);
 	if (!vdev)
@@ -523,41 +628,50 @@ static int __init virtual_inputs_init(void)
 		pr_err("%s: misc_register failed\n", vinputs_dev.name);
 		return -EINVAL;
 	}
-	vdev->mdev = &vinputs_dev;
-	vdev->notifier.notifier_call = vinputs_callback;
-	error = gpio_in_register_notifier(&vdev->notifier);
-	if (error) {
-		pr_err("failure to register remount notifier [%d]\n", error);
-		misc_deregister(&vinputs_dev);
-		kfree(vdev);
-		return error;
-	}
 
+    if (fixed_mode) {
+        vdev->virtual_inputs_cradle_notifier.notifier_call = virtual_inputs_cradle_callback;
+        cradle_register_notifier(&vdev->virtual_inputs_cradle_notifier);
+    }
+
+	vdev->mdev = &vinputs_dev;
+    if(!fixed_mode){
+        vdev->notifier.notifier_call = vinputs_callback;
+        error = gpio_in_register_notifier(&vdev->notifier);
+        if (error) {
+            pr_err("failure to register remount notifier [%d]\n", error);
+            misc_deregister(&vinputs_dev);
+            kfree(vdev);
+            return error;
+        }
+    }
 	error = vinputs_create_input_dev(vdev);
 	if (error) {
 		misc_deregister(&vinputs_dev);
 		kfree(vdev);
 		return error;
 	}
-
-	dev = vdev->mdev->this_device;
-	error = sysfs_create_group(&dev->kobj, &in_attr_group);
-	if (error) {
-		pr_err("%s: could not create sysfs group\n", __func__);
-		input_free_device(vdev->input_dev);
-		misc_deregister(&vinputs_dev);
-		kfree(vdev);
-		return error;
-	}
-
+    dev = vdev->mdev->this_device;
+    error = sysfs_create_group(&dev->kobj, &in_attr_group);
+    if (error) {
+        pr_err("%s: could not create sysfs group\n", __func__);
+        input_free_device(vdev->input_dev);
+        misc_deregister(&vinputs_dev);
+        kfree(vdev);
+        return error;
+    }
     mutex_init(&vdev->lock);
     vdev->reinit = 1;
-	INIT_WORK(&vdev->work, vinputs_work_func);
-//	vinputs_init_files();
-    schedule_work(&vdev->work); 
-
-	pr_info("%s:-\n", __func__);
-
+    if(!fixed_mode){
+        INIT_WORK(&vdev->work, vinputs_work_func);
+        //	vinputs_init_files();
+        schedule_work(&vdev->work); 
+    }else{
+        INIT_DELAYED_WORK(&vdev->virtual_input_init_work, cradle_is_connected_work_fix);
+        vdev->cradle_attached = 0;
+        schedule_delayed_work(&vdev->virtual_input_init_work, 0);
+    }
+    pr_info("%s:-\n", __func__);
 	return 0;
 }
 

@@ -3,6 +3,7 @@
 #include <linux/version.h>
 #include <linux/fs.h>
 #include <linux/gpio.h>
+#include <linux/of.h>
 #include <linux/module.h>
 
 #include <linux/miscdevice.h>
@@ -11,6 +12,7 @@
 #include <linux/sched.h>
 #include <linux/notifier.h>
 #include <linux/hwmon-sysfs.h>
+#include "../misc/hi_3w/hi_3w.h"
 
 MODULE_LICENSE("Dual BSD/GPL");
 
@@ -516,6 +518,11 @@ static int virt_gpio_out_get(struct gpio_chip *chip, unsigned offset)
 	return 0;
 }
 
+static int virt_gpio_fix_out_get(struct gpio_chip *chip, unsigned offset)
+{
+	return 0;
+}
+
 static void virt_gpio_mcu_set(struct gpio_chip *chip, unsigned offset, int value)
 {
 	struct virt_gpio *dev = g_pvpgio;
@@ -620,6 +627,41 @@ static void virt_gpio_out_set(struct gpio_chip *chip, unsigned offset, int value
 	wake_up_interruptible(&dev->gpo_bank.wq);
 }
 
+static void virt_gpio_fix_out_set(struct gpio_chip *chip, unsigned offset, int value){
+    struct virt_gpio * dev = g_pvpgio;
+    int tx_cmd = 0;
+    int en_send = 0;
+	DEFINE_LOCK_FLAGS(flags); // make last
+    LOCK_BANK(dev->gpo_bank.lock, flags);
+    //pr_notice("offset %d value %d\n", offset, value);
+    switch (offset) {
+    case 0:
+        if (value) {
+            tx_cmd = 0x21;
+        }else{
+            tx_cmd = 0x20;
+        }
+        en_send = 1;
+        break;
+    case 1:
+        if (value) {
+            tx_cmd = 0x23;
+        }else{
+            tx_cmd = 0x22;
+        }
+        en_send = 1;
+        break;
+    default:break;
+    }
+    if (en_send) {
+        tx_cmd <<= 24;
+        //pr_notice("offset %x\n", tx_cmd);
+        hi_3w_tx_cmd(&tx_cmd, 0);
+        en_send = 0;
+    }
+    UNLOCK_BANK(dev->gpo_bank.lock, flags);
+}
+
 static int virt_gpio_direction_input(struct gpio_chip *chip, unsigned offset)
 {
 	// set direction input
@@ -680,6 +722,13 @@ static int __init virtual_gpio_init(void)
 {
 	struct virt_gpio * dev;
 	int ret;
+    int fixed_mode = 0;
+    struct device_node *np;
+    np = of_find_compatible_node(NULL, NULL, "mcn,fixed-vinputs");
+    if (np) {
+        fixed_mode = 1;
+        pr_err("node is finded\n");
+    }
 
 	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
 	if(!dev)
@@ -710,8 +759,13 @@ static int __init virtual_gpio_init(void)
 	dev->gpiochip_out.request = virt_gpio_out_request;
 	dev->gpiochip_out.free = virt_gpio_out_free;
 	dev->gpiochip_out.direction_output = virt_gpio_direction_output;
-	dev->gpiochip_out.set = virt_gpio_out_set;
-	dev->gpiochip_out.get = virt_gpio_out_get;
+    if (!fixed_mode) {
+        dev->gpiochip_out.set = virt_gpio_out_set;
+        dev->gpiochip_out.get = virt_gpio_out_get;
+    }else{
+        dev->gpiochip_out.set = virt_gpio_fix_out_set;
+        dev->gpiochip_out.get = virt_gpio_fix_out_get;
+    }
 	dev->gpiochip_out.base = -1;
 	dev->gpiochip_out.ngpio = 8;
 #ifdef VGPIO_USE_SPINLOCK
