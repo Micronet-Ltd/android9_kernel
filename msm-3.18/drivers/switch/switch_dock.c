@@ -601,14 +601,14 @@ static void dock_switch_work_func_fix(struct work_struct *work)
         cmd = 2<<24;
         pr_notice("request %x\n", (cmd));
         transmit_err = hi_3w_tx_cmd(&cmd, 1);
-        pr_notice("answere %x\n", (cmd & 0x00FFFFFF));
+        pr_notice("answer %x\n", (cmd & 0x00FFFFFF));
         while (transmit_err) {
             pr_notice("transmit error %d\n", transmit_err);
             cmd = 0;
             cmd = 2<<24;
             msleep(10);
             transmit_err = hi_3w_tx_cmd(&cmd, 1);
-            if (++err_cnt>=15) {
+            if (++err_cnt >= 15) {
                 err_cnt = 0;
                 break;
             }
