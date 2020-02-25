@@ -1878,7 +1878,7 @@ static void dwc3_msm_notify_event(struct dwc3 *dwc, unsigned event,
         }
 		break;
 	case DWC3_CONTROLLER_RESTART_USB_SESSION:
-		dev_dbg(mdwc->dev, "DWC3_CONTROLLER_RESTART_USB_SESSION received\n");
+		dev_notice(mdwc->dev, "DWC3_CONTROLLER_RESTART_USB_SESSION\n");
 		schedule_work(&mdwc->restart_usb_work);
 		break;
 	case DWC3_CONTROLLER_NOTIFY_DISABLE_UPDXFER:
@@ -2549,6 +2549,8 @@ static int dwc3_msm_power_get_property_usb(struct power_supply *psy,
 	return 0;
 }
 
+static int dwc3_otg_start_peripheral(struct dwc3_msm *mdwc, int on);
+
 static int dwc3_msm_power_set_property_usb(struct power_supply *psy,
 				  enum power_supply_property psp,
 				  const union power_supply_propval *val)
@@ -2565,7 +2567,16 @@ static int dwc3_msm_power_set_property_usb(struct power_supply *psy,
             // Vladimir
             // basic cradle plugged but but power might be supplied soon
             //
-            mdwc->cradle_state = 1;
+            if (!mdwc->cradle_state) {
+                mdwc->cradle_state = 1; 
+                if (DWC3_PROPRIETARY_CHARGER != mdwc->chg_type) {
+                    if (OTG_STATE_B_PERIPHERAL == mdwc->otg_state) {
+                        mdwc->otg_state = OTG_STATE_B_IDLE;
+                        dwc3_otg_start_peripheral(mdwc, 0);
+                    }
+                }
+                dwc3_notify_event(dwc, DWC3_CONTROLLER_RESTART_USB_SESSION, 0); 
+            }
         } else {
             // Vladimir
             // enhance cradle plug/unplug indication
@@ -4084,6 +4095,7 @@ static void dwc3_msm_otg_sm_work(struct work_struct *w)
             case DWC3_PROPRIETARY_CHARGER: {
                 int curr;
 				dbg_event(0xFF, "DCPCharger", 0);
+                dev_notice(mdwc->dev, "b_sess_vld, try DWC3_PROPRIETARY_CHARGER\n");
                 if (mdwc->cradle_state) {
                     curr = DWC3_HVDCP_CHG_MAX;
                 } else {
@@ -4121,11 +4133,13 @@ static void dwc3_msm_otg_sm_work(struct work_struct *w)
 				if (mdwc->detect_dpdm_floating && mdwc->chg_type == DWC3_SDP_CHARGER) {
 					dwc3_check_float_lines(mdwc);
 					if (mdwc->chg_type != DWC3_SDP_CHARGER) {
-                        dev_notice(mdwc->dev, "DP/DM are float, replace charger by DWC3_PROPRIETARY_CHARGER\n");
+                        dev_notice(mdwc->dev, "DP/DM are float, replace none DWC3_SDP_CHARGER by DWC3_PROPRIETARY_CHARGER\n");
 						break;
                     }
                 } else if (mdwc->cradle_state) {
                     mdwc->chg_type = DWC3_PROPRIETARY_CHARGER;
+                    dev_notice(mdwc->dev, "b_sess_vld, replace DWC3_SDP_CHARGER by DWC3_SDP_CHARGER\n");
+                    break;
                 }
 				dwc3_otg_start_peripheral(mdwc, 1);
 				mdwc->otg_state = OTG_STATE_B_PERIPHERAL;
