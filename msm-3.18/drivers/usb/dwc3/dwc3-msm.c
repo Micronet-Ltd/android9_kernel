@@ -2616,8 +2616,8 @@ static int dwc3_msm_power_set_property_usb(struct power_supply *psy,
 		break;
 	/* Process PMIC notification in PRESENT prop */
 	case POWER_SUPPLY_PROP_PRESENT:
-		dev_dbg(mdwc->dev, "%s: notify xceiv event with val:%d\n",
-							__func__, val->intval);
+		dev_notice(mdwc->dev, "POWER_SUPPLY_PROP_PRESENT [%d,%d,%d]\n",
+							mdwc->otg_state, val->intval, mdwc->vbus_active);
 		/*
 		 * Now otg_sm_work() state machine waits for USB cable status.
 		 * Hence here it makes sure that schedule resume work only if
@@ -3843,7 +3843,7 @@ static int dwc3_msm_gadget_vbus_draw(struct dwc3_msm *mdwc, unsigned mA)
 		goto skip_psy_type;
 	}
 
-	dev_dbg(mdwc->dev, "Requested curr from USB = %u, max-type-c:%u\n",
+	dev_notice(mdwc->dev, "Requested curr from USB = %u, max-type-c:%u\n",
 					mA, mdwc->typec_current_max);
 
 	if (mdwc->chg_type == DWC3_SDP_CHARGER)
@@ -4134,6 +4134,7 @@ static void dwc3_msm_otg_sm_work(struct work_struct *w)
 					dwc3_check_float_lines(mdwc);
 					if (mdwc->chg_type != DWC3_SDP_CHARGER) {
                         dev_notice(mdwc->dev, "DP/DM are float, replace none DWC3_SDP_CHARGER by DWC3_PROPRIETARY_CHARGER\n");
+                        dwc3_msm_gadget_vbus_draw(mdwc, DWC3_HVDCP_CHG_MAX);
 						break;
                     }
                 } else if (mdwc->cradle_state) {
@@ -4149,9 +4150,13 @@ static void dwc3_msm_otg_sm_work(struct work_struct *w)
 				break;
 			}
 		} else {
-			mdwc->typec_current_max = 0;
-			dwc3_msm_gadget_vbus_draw(mdwc, 0);
-			dev_notice(mdwc->dev, "No device, allowing suspend\n");
+            if (mdwc->vbus_active || mdwc->cradle_state) {
+                work = 1;
+            } else {
+                mdwc->typec_current_max = 0; 
+                dwc3_msm_gadget_vbus_draw(mdwc, 0);
+                dev_notice(mdwc->dev, "No device, allowing suspend\n");
+            }
 			dbg_event(0xFF, "RelNodev", 0);
 			pm_relax(mdwc->dev);
 		}
