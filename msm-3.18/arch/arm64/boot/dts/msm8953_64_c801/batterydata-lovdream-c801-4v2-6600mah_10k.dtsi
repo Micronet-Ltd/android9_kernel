@@ -1,24 +1,13 @@
-/* Copyright (c) 2015-2016, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- */
 
-qcom,c801_fullymax_fb382030xl_4v2_135mah_20k {
-	/* #batterydata-fullymax-fb382030xl-c801-4v2-135mah_20k_FG_averaged_MasterSlave_Jan9th2019*/
+qcom,batterydata-lovdream-c801-4v2-6600mah_10k {
+	/* #3794992_Lovdream_C801_HE_6600mAH_FG_averaged_MasterSlave_Jan9th2019*/
 	qcom,max-voltage-uv = <4200000>;
-	qcom,fastchg-current-ma = <300>;
+	qcom,fastchg-current-ma = <2650>;
 	qcom,fg-cc-cv-threshold-mv = <4190>;
-	qcom,nom-batt-capacity-mah = <135>;
-	qcom,batt-id-kohm = <20>;
+	qcom,nom-batt-capacity-mah = <6600>;
+	qcom,batt-id-kohm = <10>;
 	qcom,battery-beta = <3440>;
-	qcom,battery-type = "c801_fullymax_fb382030xl_4v2_135mah_20k";
+	qcom,battery-type = "batterydata-lovdream-c801-4v2-6600mah_10k";
 	qcom,chg-rslow-comp-c1 = <2861349>;
 	qcom,chg-rslow-comp-c2 = <3721355>;
 	qcom,chg-rs-to-rslow = <324284>;
@@ -39,7 +28,7 @@ qcom,c801_fullymax_fb382030xl_4v2_135mah_20k {
 		 0F 88 18 82 
 		 89 9A 05 BE 
 		 B9 CB 68 10 
-		 87 00 05 59 
+		 65 1A 05 59 
 		 FB 6A EE FA 
 		 8F 45 C2 19 
 		 EB 40 00 00 
