@@ -11,7 +11,7 @@
  */
 
 qcom,c801_fullymax_fb382030xl_4v2_135mah_20k {
-	/* #batterydata-fullymax-fb382030xl-c801-4v2-135mah_20k_FG_averaged_MasterSlave_Jan9th2019*/
+	/* #batterydata-fullymax-fb382030xl-c801-4v2-135mah_20k_FG_averaged_MasterSlave_Apr8th2020*/
 	qcom,max-voltage-uv = <4200000>;
 	qcom,fastchg-current-ma = <300>;
 	qcom,fg-cc-cv-threshold-mv = <4190>;
@@ -19,42 +19,42 @@ qcom,c801_fullymax_fb382030xl_4v2_135mah_20k {
 	qcom,batt-id-kohm = <20>;
 	qcom,battery-beta = <3440>;
 	qcom,battery-type = "c801_fullymax_fb382030xl_4v2_135mah_20k";
-	qcom,chg-rslow-comp-c1 = <2861349>;
-	qcom,chg-rslow-comp-c2 = <3721355>;
-	qcom,chg-rs-to-rslow = <324284>;
-	qcom,chg-rslow-comp-thr = <0x9D>;
-	qcom,checksum = <0xC1C7>;
+	qcom,chg-rslow-comp-c1 = <1520389>;
+	qcom,chg-rslow-comp-c2 = <2485752>;
+	qcom,chg-rs-to-rslow = <1476733>;
+	qcom,chg-rslow-comp-thr = <0xB4>;
+	qcom,checksum = <0xE772>;
 	qcom,gui-version = "PMI8950GUI - 2.0.0.16";
 	qcom,fg-profile-data = [
-		 98 83 AB 6D 
-		 C4 72 E8 5E 
-		 28 83 BB 78 
-		 8F 85 7D 81 
-		 CC 81 3C 9A 
-		 5C BC 33 C8 
-		 6C 16 C0 83 
-		 34 75 3F 79 
-		 A0 6D 26 83 
-		 36 7A 16 8C 
-		 0F 88 18 82 
-		 89 9A 05 BE 
-		 B9 CB 68 10 
-		 87 00 05 59 
-		 FB 6A EE FA 
-		 8F 45 C2 19 
-		 EB 40 00 00 
-		 29 4D B6 3C 
-		 FE 4A 00 00 
+		 30 88 EA 7F 
+		 34 82 6F 7C 
+		 38 83 03 72 
+		 DA 7C A8 78 
+		 0A 82 4F 98 
+		 D4 B4 75 BB 
+		 A1 1B D0 83 
+		 6C 76 59 7A 
+		 D7 6F 30 83 
+		 EC 78 AF 85 
+		 75 81 24 82 
+		 E5 98 C1 B6 
+		 7D C2 75 16 
+		 90 00 1A 62 
+		 FB 6A E6 FF 
+		 51 4C C4 07 
+		 37 42 00 00 
+		 1C 47 43 38 
+		 3F 21 00 00 
 		 00 00 00 00 
 		 00 00 00 00 
-		 22 62 04 61 
-		 67 5B BD 83 
-		 88 75 C1 68 
-		 3E 82 6C 91 
-		 42 75 76 68 
-		 7B 96 8E CA 
-		 0B FA 58 E3 
-		 54 A0 71 0C 
+		 58 78 24 79 
+		 9F 5A 7A 53 
+		 5E 64 B1 64 
+		 00 69 8B 6A 
+		 B5 53 FD 65 
+		 EB 8D F7 BB 
+		 14 6A 6B 6A 
+		 6C A0 71 0C 
 		 28 00 FF 36 
 		 F0 11 30 03 
 		 00 00 00 0C 
