@@ -2160,7 +2160,7 @@ static int dwc3_msm_suspend(struct dwc3_msm *mdwc)
 				    mdwc->otg_state == OTG_STATE_B_IDLE ||
 				    mdwc->in_restart)) {
 		mdwc->lpm_flags |= MDWC3_POWER_COLLAPSE;
-		dev_dbg(mdwc->dev, "%s: power collapse\n", __func__);
+		dev_notice(mdwc->dev, "%s: power collapse\n", __func__);
 		dwc3_msm_config_gdsc(mdwc, 0);
 		clk_disable_unprepare(mdwc->sleep_clk);
 	}
@@ -2540,8 +2540,18 @@ static int dwc3_msm_power_get_property_usb(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_HEALTH:
 		val->intval = mdwc->health_status;
 		break;
-	case POWER_SUPPLY_PROP_USB_OTG:
-		val->intval = !mdwc->id_state;
+    case POWER_SUPPLY_PROP_USB_OTG:
+        if (0x55AA == val->intval) {
+            struct dwc3 *dwc = platform_get_drvdata(mdwc->dwc3);
+
+            if (dwc)
+                val->intval = atomic_read(&dwc->in_lpm);
+            else
+                val->intval = 0;
+            dev_notice(mdwc->dev, "POWER_SUPPLY_PROP_USB_OTG (0x55aa: %s\n", (val->intval)?"in lpm":"still active");
+        } else {
+            val->intval = !mdwc->id_state; 
+        }
 		break;
 	default:
 		return -EINVAL;

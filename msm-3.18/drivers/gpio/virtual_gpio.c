@@ -211,7 +211,7 @@ static ssize_t set_in(struct device *dev, struct device_attribute *attr, const c
 	strncpy(str, buf + 2, 2);
 	val = simple_strtol(str, NULL, 16);
 
-	pr_info("%s, mask 0x%X, val 0x%X\n", __func__, (unsigned int)mask, (unsigned int)val);
+	pr_notice("%s, mask 0x%X, val 0x%X\n", __func__, (unsigned int)mask, (unsigned int)val);
 
 	for(i = 0; i < g_pvpgio->gpiochip_in.ngpio; i++) {
 		if(test_bit(i, &mask)) {
@@ -230,7 +230,7 @@ static ssize_t set_in(struct device *dev, struct device_attribute *attr, const c
 	}
 	if (changed_bits) {
 		g_gpio = changed_bits;
-		pr_notice("gpio_in_notify 0x%X\n", (unsigned int)g_gpio);
+		pr_notice("%s: gpio_in_notify 0x%X\n", __func__, (unsigned int)g_gpio);
 		gpio_in_notify(1, &g_gpio);
 	}
 
@@ -454,7 +454,7 @@ static ssize_t virt_gpio_chr_write(struct file *file, const char __user *buf, si
 			}
 		}
 		if (val) {
-    		pr_notice("gpio_in_notify %d\n", val);
+    		pr_notice("%s: gpio_in_notify %d\n", __func__, val);
     	    g_gpio = val;
     	    gpio_in_notify(1, &g_gpio);
 		}
