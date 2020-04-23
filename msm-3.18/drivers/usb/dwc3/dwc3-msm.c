@@ -2592,8 +2592,20 @@ static int dwc3_msm_power_set_property_usb(struct power_supply *psy,
             // enhance cradle plug/unplug indication
             // enable host mode, Vbus shouldn't be supplied to cradle
             //
-            mdwc->cradle_state = (val->intval & 0x10) ? 1 : 0; 
             id = (val->intval & (~0x10)) ? DWC3_ID_GROUND : DWC3_ID_FLOAT;
+            if (!mdwc->cradle_state) {
+                mdwc->cradle_state = (val->intval & 0x10) ? 1 : 0; 
+                if (DWC3_PROPRIETARY_CHARGER == mdwc->chg_type) {
+                    if (OTG_STATE_B_PERIPHERAL == mdwc->otg_state) {
+                        mdwc->otg_state = OTG_STATE_B_IDLE;
+                        dwc3_otg_start_peripheral(mdwc, 0);
+                    }
+                }
+                dwc3_msm_gadget_vbus_draw(mdwc, 0);
+//                dwc3_notify_event(dwc, DWC3_CONTROLLER_RESTART_USB_SESSION, 0); 
+            } else {
+                mdwc->cradle_state = (val->intval & 0x10) ? 1 : 0; 
+            }
             dev_notice(mdwc->dev, "POWER_SUPPLY_PROP_USB_OTG :%d-->%d\n", mdwc->id_state, id);
             if (mdwc->id_state == id)
                 break;
@@ -4097,7 +4109,13 @@ static void dwc3_msm_otg_sm_work(struct work_struct *w)
 			dbg_event(0xFF, "!id", 0);
 			mdwc->otg_state = OTG_STATE_A_IDLE;
 			work = 1;
-			mdwc->chg_type = DWC3_INVALID_CHARGER;
+            if (0 /*mdwc->cradle_state*/) {
+                mdwc->chg_type = DWC3_PROPRIETARY_CHARGER;
+                dwc3_msm_gadget_vbus_draw(mdwc, DWC3_HVDCP_CHG_MAX);
+                dev_notice(mdwc->dev, "enable draw from cradle\n");
+            } else {
+                mdwc->chg_type = DWC3_INVALID_CHARGER;
+            }
 		} else if (test_bit(B_SESS_VLD, &mdwc->inputs)) {
 			dbg_event(0xFF, "b_sess_vld", 0);
 			switch (mdwc->chg_type) {
@@ -4251,7 +4269,13 @@ static void dwc3_msm_otg_sm_work(struct work_struct *w)
 				dev_err(mdwc->dev, "unable to start host\n");
 				mdwc->otg_state = OTG_STATE_A_IDLE;
 				goto ret;
-			}
+			} else {
+                if (mdwc->cradle_state) {
+                    mdwc->chg_type = DWC3_PROPRIETARY_CHARGER;
+                    dwc3_msm_gadget_vbus_draw(mdwc, DWC3_HVDCP_CHG_MAX);
+                    dev_notice(mdwc->dev, "enable draw from cradle\n");
+                }
+            }
 			if (mdwc->no_wakeup_src_in_hostmode &&
 						mdwc->in_host_mode)
 				pm_wakeup_event(mdwc->dev,

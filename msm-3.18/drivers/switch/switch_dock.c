@@ -136,6 +136,7 @@ struct dock_switch_device {
     struct delayed_work	mcu_gpio_init_work;//used to initiate the mcu gpios
     int irq_ack;
     struct mutex lock;
+    long long status_change_guard;
 };
 
 #include "../gpio/gpiolib.h"
@@ -370,6 +371,11 @@ static void dock_switch_work_func(struct work_struct *work)
         wake_unlock(&ds->wlock);
         schedule_work(&ds->work); 
     }
+    if (ktime_to_ms(ktime_get()) < ds->status_change_guard) {
+        msleep(500);
+        schedule_work(&ds->work);
+    }
+    ds->status_change_guard = 0; 
 
     mutex_lock(&ds->lock);
     if (e_dock_type_basic != ds->dock_type) {
@@ -414,6 +420,7 @@ static void dock_switch_work_func(struct work_struct *work)
                         //        prop.intval = 0x55AA;
                         //    }
                         //} while (0x55AA == prop.intval);
+                        ds->status_change_guard = ktime_to_ms(ktime_get()) + 1000;
 					}
 					ds->dock_type = e_dock_type_unspecified;
 					ds->sched_irq |= SWITCH_IGN;
@@ -435,13 +442,11 @@ static void dock_switch_work_func(struct work_struct *work)
                         }
                     } else if (ds->ign_active_l != gpio_get_value(ds->ign_pin)) {
                         if (ds->mb_ind_l == gpio_get_value(ds->mb_ind_pin)) {
-                            pr_notice("unstable connection, detach all %lld\n", ktime_to_ms(ktime_get()));
-                            ds->dock_type = e_dock_type_do_reset;
                         } else {
                             pr_notice("basic cradle attempt to be plugged %lld  [ign_pin %d]\n", ktime_to_ms(ktime_get()), gpio_get_value(ds->ign_pin)); 
                             ds->dock_type = e_dock_type_basic;
+                            act = 1;
                         }
-                        act = 1;
                     }
                 }
 
@@ -454,8 +459,9 @@ static void dock_switch_work_func(struct work_struct *work)
 					//gpio_direction_input(ds->dock_pin);
 					// switch otg connector
 					if (gpio_is_valid(ds->usb_switch_pin)) {
-						pr_notice("switch usb %s connector %lld\n", (e_dock_type_unspecified == ds->dock_type)?"type-c":"44-pin", ktime_to_ms(ktime_get()));
-						gpio_set_value(ds->usb_switch_pin, !!(ds->usb_switch_l == (e_dock_type_unspecified != ds->dock_type)));
+						pr_notice("switch usb %s connector %lld\n", (e_dock_type_unspecified == ds->dock_type || e_dock_type_do_reset == ds->dock_type)?
+                                  "type-c":"44-pin", ktime_to_ms(ktime_get()));
+						gpio_set_value(ds->usb_switch_pin, !!(ds->usb_switch_l == (e_dock_type_unspecified != ds->dock_type && e_dock_type_do_reset != ds->dock_type)));
 					}
                     if (gpio_is_valid(ds->otg_en_pin)) {
                         pr_notice("reverse otg_en %lld\n", ktime_to_ms(ktime_get()));
@@ -479,35 +485,35 @@ static void dock_switch_work_func(struct work_struct *work)
             if (ds->usb_psy) {
                 //int i = 2;
                 pr_notice("notify usb host about plug smart cradel %lld\n", ktime_to_ms(ktime_get()));
-                //do {
-                    prop.intval = 0x55AA; 
-                    ds->usb_psy->get_property(ds->usb_psy, POWER_SUPPLY_PROP_USB_OTG, &prop);
-                    if (prop.intval) {
-                        pr_notice("smart cradle attempt to be plugged %lld\n", ktime_to_ms(ktime_get()));
-                        ds->dock_type = e_dock_type_smart;
-                        prop.intval = 0x11; 
-                        power_supply_set_usb_otg(ds->usb_psy, prop.intval);
-                        power_supply_set_current_limit(ds->usb_psy, 1500*1000);
-                        //break;
-                    } else {
-                        //msleep(100);
-                        //prop.intval = 0; 
-                        //power_supply_set_usb_otg(ds->usb_psy, prop.intval);
-                        //msleep(20);
-                    }
-                //} while (0x55AA == prop.intval);
-            }
-            if (IG_HI_PATTERN == val) {
-                val = SWITCH_DOCK | SWITCH_IGN | SWITCH_EDOCK; 
-            } else {
-                val = SWITCH_DOCK | SWITCH_EDOCK; 
+                prop.intval = 0x55AA; 
+                ds->usb_psy->get_property(ds->usb_psy, POWER_SUPPLY_PROP_USB_OTG, &prop);
+                if (1 /*prop.intval*/) {
+                    pr_notice("smart cradle attempt to be plugged %lld\n", ktime_to_ms(ktime_get()));
+                    ds->dock_type = e_dock_type_smart;
+                    prop.intval = 0x11; 
+                    power_supply_set_usb_otg(ds->usb_psy, prop.intval);
+                    power_supply_set_current_limit(ds->usb_psy, 1500*1000);
+                    ds->status_change_guard = ktime_to_ms(ktime_get()) + 1000;
+                } else {
+                    pr_notice("unstable connection, detach all %lld\n", ktime_to_ms(ktime_get()));
+                }
             }
 
-            // disable dock interrupts while smart cradle
-            if (ds->dock_irq) {
-                enable_switch_irq(ds->dock_irq, 0);
-                pr_notice("disable dock irq[%d] %lld\n", ds->dock_irq, ktime_to_ms(ktime_get()));
-                ds->sched_irq &= ~SWITCH_IGN;
+            if (0x11 == prop.intval) {
+                if (IG_HI_PATTERN == val) {
+                    val = SWITCH_DOCK | SWITCH_IGN | SWITCH_EDOCK; 
+                } else {
+                    val = SWITCH_DOCK | SWITCH_EDOCK; 
+                }
+
+                // disable dock interrupts while smart cradle
+                if (ds->dock_irq) {
+                    enable_switch_irq(ds->dock_irq, 0);
+                    pr_notice("disable dock irq[%d] %lld\n", ds->dock_irq, ktime_to_ms(ktime_get()));
+                    ds->sched_irq &= ~SWITCH_IGN;
+                }
+            } else {
+                val = e_dock_type_do_reset;
             }
 
             if (gpio_is_valid(ds->dock_pin)) {
@@ -598,12 +604,16 @@ static void dock_switch_work_func(struct work_struct *work)
         } else {
             wake_unlock(&ds->wlock);
         }
-		ds->state = val;
+        if (e_dock_type_do_reset == val) {
+            ds->state = 0;
+        } else {
+            ds->state = val;
+        }
 //        pr_notice("notify dock state [%d] %lld\n", ds->state, ktime_to_ms(ktime_get()));
 		switch_set_state(&ds->sdev, val);
 	}
 
-    if (e_dock_type_do_reset == ds->dock_type) {
+    if (e_dock_type_do_reset == val) {
         schedule_work(&ds->work); 
     }
 }
