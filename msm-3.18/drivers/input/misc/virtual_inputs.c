@@ -148,7 +148,7 @@ static ssize_t show_in(struct device *dev, struct device_attribute *attr, char *
 	if( (ix > ARRAY_SIZE(vinputs) - 1) || ix < 0 ){
 		return sprintf(buf, "in%d - bad parameter\n", ix);
 	}
-	pr_info("%d\n", vdev->vmap[ix].code);
+	pr_notice("%s: %d\n", __func__, vdev->vmap[ix].code);
 	return sprintf(buf, "%d\n", vdev->vmap[ix].val);
 }
 static SENSOR_DEVICE_ATTR(in0_input, S_IRUGO, show_in, NULL, 0);
