@@ -38,6 +38,8 @@ MODULE_LICENSE("Dual BSD/GPL");
 #define SET_BIT32(bit_map, bit_index) (bit_map |= (((uint32_t)1)<<bit_index))
 #define CLEAR_BIT32(bit_map, bit_index) (bit_map &= (~(((uint32_t)1)<<bit_index)))
 
+extern int cradle_register_notifier(struct notifier_block *nb);
+
 //should be identical to the same enum in control.h
 typedef enum
 {
@@ -78,6 +80,7 @@ typedef enum mcu_status
 	ERROR_SENDING = 2
 } mcu_response_t;
 
+typedef void(*p_out_set)(struct gpio_chip *, unsigned, int);
 struct mcu_bank
 {
 	wait_queue_head_t mcu_wq; //will be used to sleep and wait for response from the MCU
@@ -96,6 +99,7 @@ struct mcu_bank
 
 	int returned_gpio_val;
 	volatile mcu_response_t returned_flag; 
+    p_out_set pntr_func_gpio_set;
 
 };
 
@@ -151,9 +155,10 @@ struct virt_gpio {
 	unsigned long gpi_values;
 	struct vgpio_bank gpo_bank;
 	struct mcu_bank mcu_gpio_bank;
-
+    struct notifier_block virtual_outs_cradle_notifier;//EMM
 	unsigned long enabled_out;
 	unsigned long enabled_in;
+    int     cradle_attached;
 };
 
 struct virt_gpio * g_pvpgio;
@@ -617,23 +622,28 @@ static void virt_gpio_out_set(struct gpio_chip *chip, unsigned offset, int value
 	LOCK_BANK(dev->gpo_bank.lock, flags);
 
 	__set_bit(offset, &dev->gpo_bank.gpio_mask);
-	if(value)
+	if(value){
+        pr_notice("value of queue for 1 %d\n", value);
 		__set_bit(offset, &dev->gpo_bank.gpio_value);
-	else
+    }
+	else{
+        pr_notice("value of queue for 0 %d\n", value);
 		__clear_bit(offset, &dev->gpo_bank.gpio_value);
+    }
 
 	UNLOCK_BANK(dev->gpo_bank.lock, flags);
-
+    pr_notice("gpio set to queue%d\n", dev->cradle_attached);
 	wake_up_interruptible(&dev->gpo_bank.wq);
 }
 
-static void virt_gpio_fix_out_set(struct gpio_chip *chip, unsigned offset, int value){
+static void virt_gpio_basic_fix_out_set(struct gpio_chip *chip, unsigned offset, int value){
     struct virt_gpio * dev = g_pvpgio;
     int tx_cmd = 0;
     int en_send = 0;
 	DEFINE_LOCK_FLAGS(flags); // make last
     LOCK_BANK(dev->gpo_bank.lock, flags);
     //pr_notice("offset %d value %d\n", offset, value);
+
     switch (offset) {
     case 0:
         if (value) {
@@ -660,6 +670,33 @@ static void virt_gpio_fix_out_set(struct gpio_chip *chip, unsigned offset, int v
         en_send = 0;
     }
     UNLOCK_BANK(dev->gpo_bank.lock, flags);
+}
+
+static int __ref virtual_outs_fix_cradle_callback(struct notifier_block *nfb, unsigned long reason, void *p)
+{
+    struct virt_gpio * dev = container_of(nfb, struct virt_gpio, virtual_outs_cradle_notifier);
+    dev->cradle_attached = reason;
+    pr_notice("cradle is changed %d\n", dev->cradle_attached);
+    if (dev->cradle_attached == 2) {
+        dev->mcu_gpio_bank.pntr_func_gpio_set = virt_gpio_out_set;
+        //pr_notice("cradle like k20\n");
+    } 
+    if (dev->cradle_attached == 1) {
+        dev->mcu_gpio_bank.pntr_func_gpio_set = virt_gpio_basic_fix_out_set;
+        //pr_notice("cradle like stm32\n");
+    }
+    return NOTIFY_OK;
+}
+
+static void virt_gpio_fix_out_set(struct gpio_chip *chip, unsigned offset, int value){
+    struct virt_gpio * dev = g_pvpgio;
+	//DEFINE_LOCK_FLAGS(flags); // make last
+    //pr_notice("offset %d value %d\n", offset, value);
+    if (!dev->mcu_gpio_bank.pntr_func_gpio_set) {
+        return;
+    }
+
+    dev->mcu_gpio_bank.pntr_func_gpio_set(chip, offset, value);
 }
 
 static int virt_gpio_direction_input(struct gpio_chip *chip, unsigned offset)
@@ -763,6 +800,8 @@ static int __init virtual_gpio_init(void)
         dev->gpiochip_out.set = virt_gpio_out_set;
         dev->gpiochip_out.get = virt_gpio_out_get;
     }else{
+        dev->virtual_outs_cradle_notifier.notifier_call = virtual_outs_fix_cradle_callback;
+        cradle_register_notifier(&dev->virtual_outs_cradle_notifier);
         dev->gpiochip_out.set = virt_gpio_fix_out_set;
         dev->gpiochip_out.get = virt_gpio_fix_out_get;
     }

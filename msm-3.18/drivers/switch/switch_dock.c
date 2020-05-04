@@ -684,6 +684,16 @@ static void dock_switch_work_func_fix(struct work_struct *work)
 		switch_set_state(&ds->sdev, val);
         if (0 == (val & SWITCH_EDOCK)) {
             cradle_notify(ds->state != 0, 0);
+        }else{
+            pr_notice("state cradle is %d\n", ds->state);
+            if (ds->state) {
+                pr_notice("state cradle is 2\n");
+                cradle_notify(2, 0);
+            }else{
+                pr_notice("state cradle is 0\n");
+                cradle_notify(0, 0);
+            }
+            //cradle_notify(((ds->state > 0)?2:0), 0);
         }
 	}
 }
