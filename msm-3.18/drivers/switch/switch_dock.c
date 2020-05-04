@@ -778,9 +778,16 @@ static void dock_switch_work_func_fix(struct work_struct *work)
         }
 		ds->state = val;
 		switch_set_state(&ds->sdev, val);
-        if (0 == (val & SWITCH_EDOCK)) {
-            cradle_notify(ds->state != 0, 0);
+
+        if (val & SWITCH_EDOCK) {
+            val = 0x11;
+        } else if (val & SWITCH_ODOCK) {
+            val = 1;
+        } else {
+            val = 0;
         }
+
+        cradle_notify(val, 0);
 	}
 }
 
