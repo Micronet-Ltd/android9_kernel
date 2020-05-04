@@ -243,7 +243,7 @@ static void cradle_is_connected_work_fix(struct work_struct *work){
             tx_cmd<<=24;
             if ((status_curr ^ status_prev) & (cnt+1)) {
                 //pr_notice("request status%x\n", tx_cmd);
-                if (0x11 == vinp->cradle_attached) {
+                if (vinp->cradle_attached & 0x10) {
                     msleep(20);
                     transmit_err = hi_3w_tx_cmd(&tx_cmd, 1);
                     /*while (transmit_err) {
@@ -282,7 +282,7 @@ static void cradle_is_connected_work_fix(struct work_struct *work){
         msleep(30);
     }
 
-    if (0x11 == vinp->cradle_attached) {
+    if (vinp->cradle_attached & 0x10) {
         //pr_notice("input1 - %d, input2 - %d\n",inp_val[0], inp_val[1]);
         cmd = 0;
         //pr_notice("request status%x\n", cmd);
@@ -323,10 +323,11 @@ static int __ref virtual_inputs_cradle_callback(struct notifier_block *nfb, unsi
 {
     struct virt_inputs *vinputs = container_of(nfb, struct virt_inputs, virtual_inputs_cradle_notifier);
 
+    pr_notice("cradle state %lu\n", reason);
     vinputs->cradle_attached = reason;
     cancel_delayed_work(&vdev->virtual_input_init_work);
 
-    if (0x11 == (vinputs->cradle_attached & 0x11)) {
+    if (vinputs->cradle_attached & 0x10) {
         schedule_delayed_work(&vdev->virtual_input_init_work, 0); 
     }
 

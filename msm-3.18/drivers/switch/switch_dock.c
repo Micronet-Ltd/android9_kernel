@@ -715,6 +715,7 @@ static void dock_switch_work_func_fix(struct work_struct *work)
             }
             val = (ds->state)?ds->state:SWITCH_DOCK | val;
         }
+
         if (0 == (val & SWITCH_EDOCK)) {
             cmd = 0; 
             cmd = 2<<24;
@@ -780,9 +781,9 @@ static void dock_switch_work_func_fix(struct work_struct *work)
 		switch_set_state(&ds->sdev, val);
 
         if (val & SWITCH_EDOCK) {
-            val = 0x11;
+            val = 0x21;
         } else if (val & SWITCH_ODOCK) {
-            val = 1;
+            val = 0x11;
         } else {
             val = 0;
         }

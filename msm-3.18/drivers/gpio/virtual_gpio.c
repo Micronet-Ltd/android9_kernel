@@ -153,7 +153,7 @@ struct virt_gpio {
 	unsigned long gpi_values;
 	struct vgpio_bank gpo_bank;
 	struct mcu_bank mcu_gpio_bank;
-    struct notifier_block virtual_outs_cradle_notifier;
+    struct notifier_block virt_gpio_cradle_notifier;
 	unsigned long enabled_out;
 	unsigned long enabled_in;
     int     cradle_attached;
@@ -630,7 +630,7 @@ static void virt_gpio_out_set(struct gpio_chip *chip, unsigned offset, int value
 	wake_up_interruptible(&dev->gpo_bank.wq);
 }
 
-static void virt_gpio_fix_out_set_basic(struct gpio_chip *chip, unsigned offset, int value){
+static void virt_gpio_out_set_fix(struct gpio_chip *chip, unsigned offset, int value){
     struct virt_gpio * dev = g_pvpgio;
     int tx_cmd = 0;
     int en_send = 0;
@@ -669,36 +669,36 @@ static void virt_gpio_fix_out_set_basic(struct gpio_chip *chip, unsigned offset,
 static void virt_gpio_fix_out_set(struct gpio_chip *chip, unsigned offset, int value){
     struct virt_gpio * dev = g_pvpgio;
 
-    LOCK_BANK(dev->gpo_bank.lock, flags);
+    //LOCK_BANK(dev->gpo_bank.lock, flags);
     if (!dev->mcu_gpio_bank.pntr_func_gpio_set) {
-        UNLOCK_BANK(dev->gpo_bank.lock, flags);
+        //UNLOCK_BANK(dev->gpo_bank.lock, flags);
         return;
     }
-    UNLOCK_BANK(dev->gpo_bank.lock, flags);
+    //UNLOCK_BANK(dev->gpo_bank.lock, flags);
 
     dev->mcu_gpio_bank.pntr_func_gpio_set(chip, offset, value);
 }
 
-static int __ref virtual_outs_fix_cradle_callback(struct notifier_block *nfb, unsigned long reason, void *p)
+static int __ref virt_gpio_cradle_callback(struct notifier_block *nfb, unsigned long reason, void *p)
 {
-    struct virt_gpio * dev = container_of(nfb, struct virt_gpio, virtual_outs_cradle_notifier);
+    struct virt_gpio * dev = container_of(nfb, struct virt_gpio, virt_gpio_cradle_notifier);
     DEFINE_LOCK_FLAGS(flags);
 
     dev->cradle_attached = reason;
 
     pr_notice("%s %d\n", __func__, dev->cradle_attached);
 
-    LOCK_BANK(dev->gpo_bank.lock, flags);
+    //LOCK_BANK(dev->gpo_bank.lock, flags);
 
-    if (dev->cradle_attached & 0x10) {
+    if (dev->cradle_attached & 0x20) {
         dev->mcu_gpio_bank.pntr_func_gpio_set = virt_gpio_out_set;
-    } else if (dev->cradle_attached) {
-        dev->mcu_gpio_bank.pntr_func_gpio_set = virt_gpio_basic_fix_out_set;
+    } else if (dev->cradle_attached & 0x10) {
+        dev->mcu_gpio_bank.pntr_func_gpio_set = virt_gpio_out_set_fix;
     } else {
         dev->mcu_gpio_bank.pntr_func_gpio_set = 0;
     }
 
-    UNLOCK_BANK(dev->gpo_bank.lock, flags);
+    //UNLOCK_BANK(dev->gpo_bank.lock, flags);
 
     return NOTIFY_OK;
 }
@@ -804,10 +804,10 @@ static int __init virtual_gpio_init(void)
         dev->gpiochip_out.set = virt_gpio_out_set;
         dev->gpiochip_out.get = virt_gpio_out_get;
     }else{
-        dev->virtual_outs_cradle_notifier.notifier_call = virtual_outs_fix_cradle_callback;
-        cradle_register_notifier(&dev->virtual_outs_cradle_notifier);
         dev->gpiochip_out.set = virt_gpio_fix_out_set;
         dev->gpiochip_out.get = virt_gpio_fix_out_get;
+        dev->virt_gpio_cradle_notifier.notifier_call = virt_gpio_cradle_callback;
+        cradle_register_notifier(&dev->virt_gpio_cradle_notifier);
     }
 	dev->gpiochip_out.base = -1;
 	dev->gpiochip_out.ngpio = 8;
