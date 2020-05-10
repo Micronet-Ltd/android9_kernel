@@ -627,6 +627,8 @@ static void dock_switch_work_func(struct work_struct *work)
     }
 }
 
+#define SC_ENH_NBP  5000
+#define SC_ENH_BP   4000
 #define SC_BAS_HI   1800
 #define SC_IG_HI    110
 #define SC_IG_LOW   55
@@ -640,6 +642,7 @@ static void dock_switch_work_func_fix(struct work_struct *work)
     char ver[16];
     int transmit_err = -3;
     int err_cnt = 0;
+    static int allow_ufp = 0;
 
     if (!ds->usb_psy) {
         pr_notice("usb power supply not ready %lld\n", ktime_to_ms(ktime_get()));
@@ -684,9 +687,37 @@ static void dock_switch_work_func_fix(struct work_struct *work)
     } else {
         pr_notice("stm32/k20 attached %lld\n", ktime_to_ms(ktime_get()));
         if (val > SC_BAS_HI) {
-            pr_notice("k20 start patern %lld\n", ktime_to_ms(ktime_get()));
-            val = (SWITCH_DOCK | SWITCH_EDOCK);
-            ds->dock_type = e_dock_type_smart;
+            if (val > SC_ENH_NBP + 1000) {
+                pr_notice("k20 start patern %lld\n", ktime_to_ms(ktime_get())); 
+                val = (SWITCH_DOCK | SWITCH_EDOCK); 
+                ds->dock_type = e_dock_type_smart;
+            } else if (val > SC_ENH_NBP - 400 && val < SC_ENH_NBP + 1000) {
+                if (allow_ufp) {
+                    pr_notice("k20 cancel usb bypass back to dfp %lld\n", ktime_to_ms(ktime_get()));
+                    allow_ufp = 0; 
+
+                    prop.intval = 0x0;
+                    power_supply_set_usb_otg(ds->usb_psy, prop.intval);
+                    msleep(500);
+                }
+
+                if (e_dock_type_smart == ds->dock_type) {
+                    val = ds->state;
+                } else {
+                }
+            } else if (val > SC_BAS_HI && val < SC_ENH_BP + 500) {
+                if (!allow_ufp) {
+                    pr_notice("k20 bypass usb host, allow ufp %lld\n", ktime_to_ms(ktime_get())); 
+                    allow_ufp = 1; 
+                    prop.intval = 0x0;
+                    power_supply_set_usb_otg(ds->usb_psy, prop.intval);
+                    msleep(500);
+                }
+                if (e_dock_type_smart == ds->dock_type) {
+                  val = ds->state;
+                } else {
+                }
+            }
         } else if (val > SC_IG_HI) {
             pr_notice("freq to high ignition off %lld\n", ktime_to_ms(ktime_get()));
             val = (SWITCH_DOCK | SWITCH_ODOCK); 
@@ -743,7 +774,11 @@ static void dock_switch_work_func_fix(struct work_struct *work)
             }
             prop.intval = 0x20;
         } else {
-            prop.intval = 0x11;
+            if (allow_ufp) {
+                prop.intval = 0x20; 
+            } else {
+                prop.intval = 0x11;
+            }
         }
         power_supply_set_usb_otg(ds->usb_psy, prop.intval);
         power_supply_set_current_limit(ds->usb_psy, 1500*1000);
