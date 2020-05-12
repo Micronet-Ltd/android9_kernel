@@ -182,11 +182,26 @@ int32_t gpio_in_register_notifier(struct notifier_block *nb)
     raw_spin_lock_irqsave(&gpio_in_chain_lock, flags);
     err = raw_notifier_chain_register(&gpio_in_chain, nb);
     raw_spin_unlock_irqrestore(&gpio_in_chain_lock, flags);
-    pr_notice("%d\n", err);
+    pr_notice("%s: %d\n", __func__, err);
 
     return err;
 }
 EXPORT_SYMBOL(gpio_in_register_notifier);
+
+int32_t gpio_in_unregister_notifier(struct notifier_block *nb)
+{
+    unsigned long flags;
+    int32_t err;
+
+    pr_notice("%s\n", __func__);
+    raw_spin_lock_irqsave(&gpio_in_chain_lock, flags);
+    err = raw_notifier_chain_unregister(&gpio_in_chain, nb);
+    raw_spin_unlock_irqrestore(&gpio_in_chain_lock, flags);
+
+    return err;
+}
+EXPORT_SYMBOL(gpio_in_unregister_notifier);
+
 ///////debug access
 static ssize_t show_in(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -204,7 +219,6 @@ static ssize_t set_in(struct device *dev, struct device_attribute *attr, const c
 	int i;
 	unsigned long mask = 0, val = 0, changed_bits = 0;
 
-	pr_info("%s, count %d\n", __func__, (int)count);
 	if (5 != count) {
 		pr_err("error: format XXXX (XX - mask, XX - value)\n");
 		return count;
@@ -233,7 +247,7 @@ static ssize_t set_in(struct device *dev, struct device_attribute *attr, const c
 	}
 	if (changed_bits) {
 		g_gpio = changed_bits;
-		pr_notice("%s: gpio_in_notify 0x%X\n", __func__, (unsigned int)g_gpio);
+		pr_notice("%s: 0x%X\n", __func__, (unsigned int)g_gpio);
 		gpio_in_notify(1, &g_gpio);
 	}
 
@@ -457,7 +471,7 @@ static ssize_t virt_gpio_chr_write(struct file *file, const char __user *buf, si
 			}
 		}
 		if (val) {
-    		pr_notice("%s: gpio_in_notify %d\n", __func__, val);
+    		pr_notice("%s: %d\n", __func__, val);
     	    g_gpio = val;
     	    gpio_in_notify(1, &g_gpio);
 		}

@@ -22,6 +22,7 @@
 #define	FIND_NAME 		"vgpio_in"
 
 extern int32_t gpio_in_register_notifier(struct notifier_block *nb);
+extern int32_t gpio_in_unregister_notifier(struct notifier_block *nb);
 extern int cradle_register_notifier(struct notifier_block *nb);
 
 struct gpio_set {
@@ -58,17 +59,17 @@ static struct vinput_key vinputs[] = {
 	{ABS_HAT3Y, 0},
 };
 struct virt_inputs {
-	struct 	miscdevice*	mdev;
-	struct 	input_dev* 	input_dev;
-	struct  work_struct work;
+	struct 	miscdevice      *mdev;
+	struct 	input_dev       *input_dev;
+	struct  work_struct     work;
     struct  delayed_work    virtual_input_init_work;
-    struct  notifier_block virtual_inputs_cradle_notifier;
-	struct 	work_params wparams; 
-	struct 	vinput_key* vmap;
-	struct	gpio_set 	gpios_in;
-	struct 	notifier_block   notifier;
-	int		reinit;
-    int     cradle_attached;
+    struct  notifier_block  virtual_inputs_cradle_notifier;
+	struct 	work_params     wparams; 
+	struct 	vinput_key*     vmap;
+	struct	gpio_set 	    gpios_in;
+	struct 	notifier_block  notifier;
+	int		                reinit;
+    int                     cradle_attached;
     struct mutex lock;
 };
 
@@ -323,12 +324,37 @@ static int __ref virtual_inputs_cradle_callback(struct notifier_block *nfb, unsi
 {
     struct virt_inputs *vinputs = container_of(nfb, struct virt_inputs, virtual_inputs_cradle_notifier);
 
-    pr_notice("cradle state %lu\n", reason);
+    pr_notice("%s: cradle state %lu\n", __func__, reason);
     vinputs->cradle_attached = reason;
     cancel_delayed_work(&vdev->virtual_input_init_work);
 
     if (vinputs->cradle_attached & 0x10) {
         schedule_delayed_work(&vdev->virtual_input_init_work, 0); 
+    } else if (vinputs->cradle_attached & 0x20) {
+        if (!vdev->work.func) {
+            vdev->reinit = 1;
+            INIT_WORK(&vdev->work, vinputs_work_func);
+            schedule_work(&vdev->work);
+        }
+
+        if (!vdev->notifier.notifier_call) {
+            vdev->notifier.notifier_call = vinputs_callback; 
+            pr_notice("register vgpio notifications %lld\n", ktime_to_ms(ktime_get()));
+            if (gpio_in_register_notifier(&vdev->notifier)) {
+                pr_err("failure to register vgpio notificationsr [%lld]\n", ktime_to_ms(ktime_get()));
+                vdev->notifier.notifier_call = 0;
+            }
+        }
+    } else {
+        if (vdev->notifier.notifier_call) {
+            pr_notice("%s: deregister vgpio notifications %lld\n", __func__, ktime_to_ms(ktime_get()));
+            //gpio_in_unregister_notifier(&vdev->notifier);
+            //vdev->notifier.notifier_call = 0;
+        }
+        if (vdev->work.func) {
+            pr_notice("%s: cancel net944 based vgpio's work %lld\n", __func__, ktime_to_ms(ktime_get()));
+            //cancel_work_sync(&vdev->work);
+        }
     }
 
 	return NOTIFY_OK;
