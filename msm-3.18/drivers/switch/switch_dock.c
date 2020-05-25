@@ -675,12 +675,13 @@ static void dock_switch_work_func_fix(struct work_struct *work)
             gpio_set_value(ds->mic_sw_pin, !ds->mic_sw_l);
         }
 
+        allow_ufp = 0; 
         prop.intval = 0x0;
         power_supply_set_usb_otg(ds->usb_psy, prop.intval);
         fd = sys_open("/proc/mcu_version", O_WRONLY, 0);
         if (fd >= 0) {
             sprintf(ver, "unknown");
-            pr_notice("stm32 detached %s\n", ver);
+            pr_notice("stm32/k20 detached set ver as %s\n", ver);
             sys_write(fd, ver, strlen(ver));
             sys_close(fd);
         }
@@ -691,6 +692,14 @@ static void dock_switch_work_func_fix(struct work_struct *work)
                 pr_notice("k20 start patern %lld\n", ktime_to_ms(ktime_get())); 
                 val = (SWITCH_DOCK | SWITCH_EDOCK); 
                 ds->dock_type = e_dock_type_smart;
+                if (allow_ufp) {
+                    pr_notice("k20 cancel usb bypass back to dfp %lld\n", ktime_to_ms(ktime_get()));
+                    allow_ufp = 0; 
+
+                    prop.intval = 0x0;
+                    power_supply_set_usb_otg(ds->usb_psy, prop.intval);
+                    msleep(500);
+                }
             } else if (val > SC_ENH_NBP - 400 && val < SC_ENH_NBP + 1000) {
                 if (allow_ufp) {
                     pr_notice("k20 cancel usb bypass back to dfp %lld\n", ktime_to_ms(ktime_get()));
