@@ -1568,6 +1568,7 @@ static void release_one_tty(struct work_struct *work)
 	struct tty_driver *driver = tty->driver;
 	struct module *owner = driver->owner;
 
+    pr_notice("%s: tty%d \n", __func__, tty->index);
 	if (tty->ops->cleanup)
 		tty->ops->cleanup(tty);
 
