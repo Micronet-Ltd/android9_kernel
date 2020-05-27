@@ -510,6 +510,7 @@ static int acm_tty_open(struct tty_struct *tty, struct file *filp)
 {
 	struct acm *acm = tty->driver_data;
 
+//    dev_notice(tty->dev, "%s[%d, %d]\n", __func__, (filp && filp->f_owner.pid)?(int)filp->f_owner.pid->count:0, (filp)?(int)filp->f_count:0);
 	dev_notice(tty->dev, "%s\n", __func__);
 
 	return tty_port_open(&acm->port, tty, filp);
