@@ -290,10 +290,18 @@ static void __ref pwr_loss_mon_work(struct work_struct *work)
         pr_notice("urgent remount block devices ro %lld\n", ktime_to_ms(ktime_get()));
 
         sys_sync();
-        remount_ro(pwrl);
+        if (0) {
+            remount_ro(pwrl); 
+        }
         pr_notice("urgent shutdown device %lld\n", ktime_to_ms(ktime_get()));
-        orderly_poweroff(1);
-        return;
+        if (0) {
+            orderly_poweroff(1);
+            return;
+        }
+        // temporrary for enhance cam bringup
+        if (1) {
+            timer = 300000; 
+        }
     } else if (pwrl->pwr_lost_wlan_d < ktime_to_ms(ktime_get())) {
         pr_notice("wlan shutdown %lld\n", ktime_to_ms(ktime_get()));
         wcnss_suspend(pwrl, 1);

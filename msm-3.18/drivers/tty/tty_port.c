@@ -206,6 +206,7 @@ static void tty_port_shutdown(struct tty_port *port, struct tty_struct *tty)
 	if (port->console)
 		goto out;
 
+    pr_notice("%s: tty%d, %d\n", __func__, (port && port->tty)?port->tty->index:tty->index, port->count);
 	if (test_and_clear_bit(ASYNCB_INITIALIZED, &port->flags)) {
 		/*
 		 * Drop DTR/RTS if HUPCL is set. This causes any attached
@@ -493,6 +494,7 @@ int tty_port_close_start(struct tty_port *port,
 
 	if (port->count) {
 		spin_unlock_irqrestore(&port->lock, flags);
+        pr_notice("%s: %d\n", __func__, port->count);
 		return 0;
 	}
 	set_bit(ASYNCB_CLOSING, &port->flags);
@@ -555,6 +557,7 @@ void tty_port_close(struct tty_port *port, struct tty_struct *tty,
 {
 	if (tty_port_close_start(port, tty, filp) == 0)
 		return;
+    pr_notice("%s: tty%d, %d\n", __func__, (port && port->tty)?port->tty->index:-1, port->count);
 	tty_port_shutdown(port, tty);
 	set_bit(TTY_IO_ERROR, &tty->flags);
 	tty_port_close_end(port, tty);

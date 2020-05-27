@@ -113,6 +113,7 @@ static int acm_alloc_minor(struct acm *acm)
 /* Release the minor number associated with 'acm'.  */
 static void acm_release_minor(struct acm *acm)
 {
+    pr_notice("%s: ttyACM%d\n", __func__, acm->minor);
 	mutex_lock(&acm_table_lock);
 	acm_table[acm->minor] = NULL;
 	mutex_unlock(&acm_table_lock);
@@ -486,7 +487,7 @@ static int acm_tty_install(struct tty_driver *driver, struct tty_struct *tty)
 	struct acm *acm;
 	int retval;
 
-	dev_dbg(tty->dev, "%s\n", __func__);
+	dev_notice(tty->dev, "%s\n", __func__);
 
 	acm = acm_get_by_index(tty->index);
 	if (!acm)
@@ -509,7 +510,7 @@ static int acm_tty_open(struct tty_struct *tty, struct file *filp)
 {
 	struct acm *acm = tty->driver_data;
 
-	dev_dbg(tty->dev, "%s\n", __func__);
+	dev_notice(tty->dev, "%s\n", __func__);
 
 	return tty_port_open(&acm->port, tty, filp);
 }
@@ -616,7 +617,7 @@ static void acm_port_shutdown(struct tty_port *port)
 	struct acm_wb *wb;
 	int i;
 
-	dev_dbg(&acm->control->dev, "%s\n", __func__);
+	dev_notice(&acm->control->dev, "%s\n", __func__);
 
 	/*
 	 * Need to grab write_lock to prevent race with resume, but no need to
@@ -648,21 +649,21 @@ static void acm_port_shutdown(struct tty_port *port)
 static void acm_tty_cleanup(struct tty_struct *tty)
 {
 	struct acm *acm = tty->driver_data;
-	dev_dbg(&acm->control->dev, "%s\n", __func__);
+	dev_notice(&acm->control->dev, "%s\n", __func__);
 	tty_port_put(&acm->port);
 }
 
 static void acm_tty_hangup(struct tty_struct *tty)
 {
 	struct acm *acm = tty->driver_data;
-	dev_dbg(&acm->control->dev, "%s\n", __func__);
+	dev_notice(&acm->control->dev, "%s\n", __func__);
 	tty_port_hangup(&acm->port);
 }
 
 static void acm_tty_close(struct tty_struct *tty, struct file *filp)
 {
 	struct acm *acm = tty->driver_data;
-	dev_dbg(&acm->control->dev, "%s\n", __func__);
+	dev_notice(&acm->control->dev, "%s\n", __func__);
 	tty_port_close(&acm->port, tty, filp);
 }
 
@@ -1469,7 +1470,7 @@ skip_countries:
 	acm->ctrlurb->transfer_flags |= URB_NO_TRANSFER_DMA_MAP;
 	acm->ctrlurb->transfer_dma = acm->ctrl_dma;
 
-	dev_info(&intf->dev, "ttyACM%d: USB ACM device\n", minor);
+	dev_notice(&intf->dev, "%s: attach ttyACM%d: \n", __func__, minor);
 
 	acm->line.dwDTERate = cpu_to_le32(9600);
 	acm->line.bDataBits = 8;
@@ -1543,7 +1544,7 @@ static void acm_disconnect(struct usb_interface *intf)
 	struct tty_struct *tty;
 	int i;
 
-	dev_dbg(&intf->dev, "%s\n", __func__);
+	dev_notice(&intf->dev, "%s\n", __func__);
 
 	/* sibling interface is already cleaning up */
 	if (!acm)

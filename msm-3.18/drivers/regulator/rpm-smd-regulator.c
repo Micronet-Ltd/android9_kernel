@@ -722,6 +722,7 @@ static int rpm_vreg_is_enabled(struct regulator_dev *rdev)
 {
 	struct rpm_regulator *reg = rdev_get_drvdata(rdev);
 
+//    dev_notice(&reg->rdev->dev, "%s [%d, %d]\n", (reg->rdesc.name)?reg->rdesc.name:"unknown", reg->max_uV, reg->min_uV);
 	if (likely(!reg->use_pin_ctrl_for_enable))
 		return reg->req.param[RPM_REGULATOR_PARAM_ENABLE];
 	else
@@ -735,6 +736,9 @@ static int rpm_vreg_enable(struct regulator_dev *rdev)
 	int rc;
 	u32 prev_enable;
 
+    if (reg->rdesc.name && 0 == strncmp(reg->rdesc.name, "pm8953_l17", strlen("pm8953_l17"))) {
+        dev_notice(&reg->rdev->dev, "%s %s: [%d, %d]\n", __func__, (reg->rdesc.name) ? reg->rdesc.name : "unknown", reg->max_uV, reg->min_uV); 
+    }
 	rpm_vreg_lock(reg->rpm_vreg);
 
 	if (likely(!reg->use_pin_ctrl_for_enable)) {
@@ -770,7 +774,11 @@ static int rpm_vreg_disable(struct regulator_dev *rdev)
 	int rc;
 	u32 prev_enable;
 
-	rpm_vreg_lock(reg->rpm_vreg);
+    if (reg->rdesc.name && 0 == strncmp(reg->rdesc.name, "pm8953_l17", strlen("pm8953_l17"))) {
+        dev_notice(&reg->rdev->dev, "%s %s [%d, %d]\n", __func__, (reg->rdesc.name)?reg->rdesc.name:"unknown", reg->max_uV, reg->min_uV);
+    }
+
+    rpm_vreg_lock(reg->rpm_vreg);
 
 	if (likely(!reg->use_pin_ctrl_for_enable)) {
 		/* Disable using swen KVP. */
@@ -827,6 +835,9 @@ static int rpm_vreg_set_voltage(struct regulator_dev *rdev, int min_uV,
 	rpm_vreg_lock(reg->rpm_vreg);
 
 	prev_voltage = reg->req.param[reg->voltage_index];
+    if (reg->rdesc.name && 0 == strncmp(reg->rdesc.name, "pm8953_l17", strlen("pm8953_l17"))) {
+        dev_notice(&reg->rdev->dev, "%s %s [%d -> %d]\n", __func__, (reg->rdesc.name)?reg->rdesc.name:"unknown", prev_voltage, voltage);
+    }
 	RPM_VREG_SET_VOLTAGE(reg, voltage);
 
 	rpm_vreg_check_param_max(reg, reg->voltage_index,
@@ -1606,6 +1617,7 @@ static int rpm_vreg_device_probe(struct platform_device *pdev)
 	reg->rdesc.owner	= THIS_MODULE;
 	reg->rdesc.type		= REGULATOR_VOLTAGE;
 	reg->rdesc.ops		= vreg_ops[regulator_type];
+    dev_notice(dev, "%s reg type[%d]\n", (rpm_vreg->resource_name)?rpm_vreg->resource_name:"unknown", regulator_type);
 
 	rc = rpm_vreg_device_set_voltage_index(dev, reg, regulator_type);
 	if (rc)

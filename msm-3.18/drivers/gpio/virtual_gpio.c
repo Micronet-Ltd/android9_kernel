@@ -78,6 +78,7 @@ typedef enum mcu_status
 	ERROR_SENDING = 2
 } mcu_response_t;
 
+typedef void(*p_out_set)(struct gpio_chip *, unsigned, int);
 struct mcu_bank
 {
 	wait_queue_head_t mcu_wq; //will be used to sleep and wait for response from the MCU
@@ -96,13 +97,14 @@ struct mcu_bank
 
 	int returned_gpio_val;
 	volatile mcu_response_t returned_flag; 
+    p_out_set pntr_func_gpio_set;
 
 };
 
-/*
-//defined in switch dock and is used to inform
 extern int cradle_register_notifier(struct notifier_block *nb);
 
+/*
+//defined in switch dock and is used to inform
 struct notifier_block gpio_notifier ;
 
  unsigned long is_device_connected_to_mcu = 0;
@@ -151,9 +153,10 @@ struct virt_gpio {
 	unsigned long gpi_values;
 	struct vgpio_bank gpo_bank;
 	struct mcu_bank mcu_gpio_bank;
-
+    struct notifier_block virt_gpio_cradle_notifier;
 	unsigned long enabled_out;
 	unsigned long enabled_in;
+    int     cradle_attached;
 };
 
 struct virt_gpio * g_pvpgio;
@@ -179,11 +182,26 @@ int32_t gpio_in_register_notifier(struct notifier_block *nb)
     raw_spin_lock_irqsave(&gpio_in_chain_lock, flags);
     err = raw_notifier_chain_register(&gpio_in_chain, nb);
     raw_spin_unlock_irqrestore(&gpio_in_chain_lock, flags);
-    pr_notice("%d\n", err);
+    pr_notice("%s: %d\n", __func__, err);
 
     return err;
 }
 EXPORT_SYMBOL(gpio_in_register_notifier);
+
+int32_t gpio_in_unregister_notifier(struct notifier_block *nb)
+{
+    unsigned long flags;
+    int32_t err;
+
+    pr_notice("%s\n", __func__);
+    raw_spin_lock_irqsave(&gpio_in_chain_lock, flags);
+    err = raw_notifier_chain_unregister(&gpio_in_chain, nb);
+    raw_spin_unlock_irqrestore(&gpio_in_chain_lock, flags);
+
+    return err;
+}
+EXPORT_SYMBOL(gpio_in_unregister_notifier);
+
 ///////debug access
 static ssize_t show_in(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -201,7 +219,6 @@ static ssize_t set_in(struct device *dev, struct device_attribute *attr, const c
 	int i;
 	unsigned long mask = 0, val = 0, changed_bits = 0;
 
-	pr_info("%s, count %d\n", __func__, (int)count);
 	if (5 != count) {
 		pr_err("error: format XXXX (XX - mask, XX - value)\n");
 		return count;
@@ -230,7 +247,7 @@ static ssize_t set_in(struct device *dev, struct device_attribute *attr, const c
 	}
 	if (changed_bits) {
 		g_gpio = changed_bits;
-		pr_notice("%s: gpio_in_notify 0x%X\n", __func__, (unsigned int)g_gpio);
+		pr_notice("%s: 0x%X\n", __func__, (unsigned int)g_gpio);
 		gpio_in_notify(1, &g_gpio);
 	}
 
@@ -454,7 +471,7 @@ static ssize_t virt_gpio_chr_write(struct file *file, const char __user *buf, si
 			}
 		}
 		if (val) {
-    		pr_notice("%s: gpio_in_notify %d\n", __func__, val);
+    		pr_notice("%s: %d\n", __func__, val);
     	    g_gpio = val;
     	    gpio_in_notify(1, &g_gpio);
 		}
@@ -627,13 +644,14 @@ static void virt_gpio_out_set(struct gpio_chip *chip, unsigned offset, int value
 	wake_up_interruptible(&dev->gpo_bank.wq);
 }
 
-static void virt_gpio_fix_out_set(struct gpio_chip *chip, unsigned offset, int value){
+static void virt_gpio_out_set_fix(struct gpio_chip *chip, unsigned offset, int value){
     struct virt_gpio * dev = g_pvpgio;
     int tx_cmd = 0;
     int en_send = 0;
 	DEFINE_LOCK_FLAGS(flags); // make last
     LOCK_BANK(dev->gpo_bank.lock, flags);
     //pr_notice("offset %d value %d\n", offset, value);
+
     switch (offset) {
     case 0:
         if (value) {
@@ -660,6 +678,43 @@ static void virt_gpio_fix_out_set(struct gpio_chip *chip, unsigned offset, int v
         en_send = 0;
     }
     UNLOCK_BANK(dev->gpo_bank.lock, flags);
+}
+
+static void virt_gpio_fix_out_set(struct gpio_chip *chip, unsigned offset, int value){
+    struct virt_gpio * dev = g_pvpgio;
+
+    //LOCK_BANK(dev->gpo_bank.lock, flags);
+    if (!dev->mcu_gpio_bank.pntr_func_gpio_set) {
+        //UNLOCK_BANK(dev->gpo_bank.lock, flags);
+        return;
+    }
+    //UNLOCK_BANK(dev->gpo_bank.lock, flags);
+
+    dev->mcu_gpio_bank.pntr_func_gpio_set(chip, offset, value);
+}
+
+static int __ref virt_gpio_cradle_callback(struct notifier_block *nfb, unsigned long reason, void *p)
+{
+    struct virt_gpio * dev = container_of(nfb, struct virt_gpio, virt_gpio_cradle_notifier);
+    DEFINE_LOCK_FLAGS(flags);
+
+    dev->cradle_attached = reason;
+
+    pr_notice("%s %d\n", __func__, dev->cradle_attached);
+
+    //LOCK_BANK(dev->gpo_bank.lock, flags);
+
+    if (dev->cradle_attached & 0x20) {
+        dev->mcu_gpio_bank.pntr_func_gpio_set = virt_gpio_out_set;
+    } else if (dev->cradle_attached & 0x10) {
+        dev->mcu_gpio_bank.pntr_func_gpio_set = virt_gpio_out_set_fix;
+    } else {
+        dev->mcu_gpio_bank.pntr_func_gpio_set = 0;
+    }
+
+    //UNLOCK_BANK(dev->gpo_bank.lock, flags);
+
+    return NOTIFY_OK;
 }
 
 static int virt_gpio_direction_input(struct gpio_chip *chip, unsigned offset)
@@ -765,6 +820,8 @@ static int __init virtual_gpio_init(void)
     }else{
         dev->gpiochip_out.set = virt_gpio_fix_out_set;
         dev->gpiochip_out.get = virt_gpio_fix_out_get;
+        dev->virt_gpio_cradle_notifier.notifier_call = virt_gpio_cradle_callback;
+        cradle_register_notifier(&dev->virt_gpio_cradle_notifier);
     }
 	dev->gpiochip_out.base = -1;
 	dev->gpiochip_out.ngpio = 8;
