@@ -93,7 +93,7 @@
 			touchscreen-key-map = <59>,<158>,<139>, <60>;
 			goodix,slide-wakeup = <0>;
 			goodix,type-a-report = <0>;
-			goodix,driver-send-cfg = <1>;
+			goodix,driver-send-cfg = <0>;
 			goodix,resume-in-workqueue = <0>;
 			goodix,int-sync = <1>;
 			goodix,swap-x2y = <0>;
