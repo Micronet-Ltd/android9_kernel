@@ -67,7 +67,7 @@ int hi_3w_tx_cmd(uint32_t *cmd, bool wait_for_response)
     int ack_val; 
     int initial_val;
     int err = GENERAL_ERROR;
-    //int time_tresh;
+    int time_tresh;
     //int i; 
 
     if (!hi_dev || !cmd) {
@@ -81,6 +81,7 @@ int hi_3w_tx_cmd(uint32_t *cmd, bool wait_for_response)
 
     //read the inital state of the input pin
     mutex_lock(&hi_dev->lock);
+    time_tresh = ktime_to_us(ktime_get());
     /*time_tresh = ktime_to_us(ktime_get()) + 30000;
     while (ktime_to_us(ktime_get())<time_tresh) {
         initial_val = gpio_get_value(hi_dev->hi_3w_miso_pin);
@@ -167,7 +168,8 @@ int hi_3w_tx_cmd(uint32_t *cmd, bool wait_for_response)
         }
         err = NO_ERROR;
     } else {
-        pr_notice("request NACKed on cmd %d\n", *cmd);
+        time_tresh = ktime_to_us(ktime_get()) - time_tresh;
+        pr_notice("request NACKed on cmd %d [%d, %d]\n", *cmd, response, time_tresh);
         //NACK is received
 
         err = CMD_REJECTED;
