@@ -619,6 +619,7 @@ static void dock_switch_work_func(struct work_struct *work)
         }
 //        pr_notice("notify dock state [%d] %lld\n", ds->state, ktime_to_ms(ktime_get()));
 		switch_set_state(&ds->sdev, val);
+        cradle_notify(val != 0, 0);
 	}
 
     ds->resuming = 0;
