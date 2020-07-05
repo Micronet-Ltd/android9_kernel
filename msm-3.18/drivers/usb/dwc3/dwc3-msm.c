@@ -1589,7 +1589,7 @@ static void dwc3_restart_usb_work(struct work_struct *w)
 	mdwc->in_restart = true;
 
 	if (!mdwc->vbus_active) {
-		dev_dbg(mdwc->dev, "%s bailing out in disconnect\n", __func__);
+		dev_notice(mdwc->dev, "%s bailing out in disconnect\n", __func__);
 		dwc->err_evt_seen = false;
 		mdwc->in_restart = false;
 		return;
@@ -1681,8 +1681,10 @@ static int dwc3_msm_config_gdsc(struct dwc3_msm *mdwc, int on)
 			dev_err(mdwc->dev, "unable to enable usb3 gdsc\n");
 			return ret;
 		}
+        mdwc->vbus_reg_enabled = 1;
 	} else {
 		ret = regulator_disable(mdwc->dwc3_gdsc);
+        mdwc->vbus_reg_enabled = 0;
 		if (ret) {
 			dev_err(mdwc->dev, "unable to disable usb3 gdsc\n");
 			return ret;
@@ -3467,8 +3469,10 @@ static int dwc3_msm_remove(struct platform_device *pdev)
 	if (mdwc->bus_perf_client)
 		msm_bus_scale_unregister_client(mdwc->bus_perf_client);
 
-	if (!IS_ERR_OR_NULL(mdwc->vbus_reg) && mdwc->vbus_reg_enabled)
+	if (!IS_ERR_OR_NULL(mdwc->vbus_reg) && mdwc->vbus_reg_enabled) {
 		regulator_disable(mdwc->vbus_reg);
+        mdwc->vbus_reg_enabled = 0;
+    }
 
 	disable_irq(mdwc->hs_phy_irq);
 	if (mdwc->ss_phy_irq)
@@ -3645,6 +3649,7 @@ static int dwc3_otg_start_host(struct dwc3_msm *mdwc, int on)
 		if (!IS_ERR(mdwc->vbus_reg)) {
             if (mdwc->cradle_state) {
                 ret = 0;
+                mdwc->vbus_reg_enabled = 0;
             } else {
                 ret = regulator_enable(mdwc->vbus_reg);
                 mdwc->vbus_reg_enabled = 1;
@@ -3735,6 +3740,7 @@ static int dwc3_otg_start_host(struct dwc3_msm *mdwc, int on)
             if (mdwc->vbus_reg_enabled) {
                 dev_notice(mdwc->dev, "disable Vbus\n");
                 ret = regulator_disable(mdwc->vbus_reg); 
+                mdwc->vbus_reg_enabled = 0;
             } else {
                 ret = 0;
             }

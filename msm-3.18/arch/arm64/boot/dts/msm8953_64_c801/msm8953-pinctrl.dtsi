@@ -1845,5 +1845,32 @@ cradle connectivety
 				};
 			};
 		};
+		pwr_loss_mon {
+			pwr_loss_mon_active: pwr_loss_mon_active {
+				mux {
+					pins = "gpio46";
+					function = "gpio";
+				};
+
+				config {
+					pins = "gpio46";
+					drive-strength = <2>;
+					bias-pull-down;
+				};
+			};
+
+			pwr_loss_mon_suspend: pwr_loss_mon_suspend {
+				mux {
+					pins = "gpio46";
+					function = "gpio";
+				};
+
+				config {
+					pins = "gpio46";
+					drive-strength = <2>;
+					bias-pull-down;
+				};
+			};
+		};
 	};
 };

@@ -93,7 +93,7 @@
 			touchscreen-key-map = <59>,<158>,<139>, <60>;
 			goodix,slide-wakeup = <0>;
 			goodix,type-a-report = <0>;
-			goodix,driver-send-cfg = <0>;
+			goodix,driver-send-cfg = <1>;
 			goodix,resume-in-workqueue = <0>;
 			goodix,int-sync = <1>;
 			goodix,swap-x2y = <0>;
@@ -180,6 +180,7 @@
 		qcom,vref-batt-therm-uv = <1800000>;
 		#include "batterydata-hwe30100100_2p-c801-4v2-6600mah_10k.dtsi"
 		#include "batterydata-fullymax-fb382030xl-c801-4v2-135mah_20k.dtsi"
+		#include "batterydata-scap-c801-4v2-135mah_30k.dtsi"
 	};
 };
 

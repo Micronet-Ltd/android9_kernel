@@ -10,15 +10,15 @@
  * GNU General Public License for more details.
  */
 
-qcom,c801_fullymax_fb382030xl_4v2_135mah_20k {
-	/* #batterydata-fullymax-fb382030xl-c801-4v2-135mah_20k_FG_averaged_MasterSlave_Apr8th2020*/
+qcom,c801_scap_4v2_135mah_30k {
+	/* #batterydata-scap-c801-4v2-135mah_30k_FG_averaged_MasterSlave_Apr8th2020*/
 	qcom,max-voltage-uv = <4200000>;
 	qcom,fastchg-current-ma = <300>;
 	qcom,fg-cc-cv-threshold-mv = <4190>;
 	qcom,nom-batt-capacity-mah = <135>;
-	qcom,batt-id-kohm = <16>;
+	qcom,batt-id-kohm = <22>;
 	qcom,battery-beta = <3440>;
-	qcom,battery-type = "c801_fullymax_fb382030xl_4v2_135mah_20k";
+	qcom,battery-type = "c801_scap_4v2_135mah_30k";
 	qcom,chg-rslow-comp-c1 = <1520389>;
 	qcom,chg-rslow-comp-c2 = <2485752>;
 	qcom,chg-rs-to-rslow = <1476733>;

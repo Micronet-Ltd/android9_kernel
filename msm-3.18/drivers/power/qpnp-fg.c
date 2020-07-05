@@ -6596,7 +6596,12 @@ done:
 	pr_info("Battery SOC: %d, V: %duV\n", get_prop_capacity(chip),
 		fg_data[FG_DATA_VOLTAGE].value);
 	complete_all(&chip->fg_reset_done);
-	return rc;
+    if (0 == strncmp(batt_type_str, "c801_scap_4v2_135mah_30k", strlen("c801_scap_4v2_135mah_30k"))) {
+        pr_notice("s-cap profile, disable charging\n");
+        set_prop_enable_charging(chip, 0);
+        chip->charging_disabled = 1;
+    }
+    return rc; 
 no_profile:
 	chip->soc_reporting_ready = true;
 	if (chip->charging_disabled) {
