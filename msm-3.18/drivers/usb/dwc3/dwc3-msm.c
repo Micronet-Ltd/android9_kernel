@@ -2590,6 +2590,7 @@ static int dwc3_msm_power_set_property_usb(struct power_supply *psy,
                 dwc3_notify_event(dwc, DWC3_CONTROLLER_RESTART_USB_SESSION, 0); 
             }
         } else {
+            int resume = 0;
             // Vladimir
             // enhance cradle plug/unplug indication
             // enable host mode, Vbus shouldn't be supplied to cradle
@@ -2606,6 +2607,9 @@ static int dwc3_msm_power_set_property_usb(struct power_supply *psy,
                 dwc3_msm_gadget_vbus_draw(mdwc, 0);
 //                dwc3_notify_event(dwc, DWC3_CONTROLLER_RESTART_USB_SESSION, 0); 
             } else {
+                if (mdwc->cradle_state) {
+                    resume = 1;
+                }
                 mdwc->cradle_state = (val->intval & 0x10) ? 1 : 0; 
             }
             dev_notice(mdwc->dev, "POWER_SUPPLY_PROP_USB_OTG :%d-->%d\n", mdwc->id_state, id);
@@ -2624,6 +2628,11 @@ static int dwc3_msm_power_set_property_usb(struct power_supply *psy,
             if (dwc->is_drd) {
                 dbg_event(0xFF, "stayID", 0);
                 pm_stay_awake(mdwc->dev);
+                if (resume) {
+                    if (atomic_read(&dwc->in_lpm)) {
+                        mdwc->resume_pending = true;
+                    }
+                }
                 queue_delayed_work(mdwc->dwc3_resume_wq,
                         &mdwc->resume_work, 0);
             }
