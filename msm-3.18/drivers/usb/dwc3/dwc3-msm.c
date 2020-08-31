@@ -1635,7 +1635,7 @@ static int msm_dwc3_usbdev_notify(struct notifier_block *self,
 	if (action != USB_BUS_DIED)
 		return 0;
 
-	dev_dbg(mdwc->dev, "%s initiate recovery from hc_died\n", __func__);
+	dev_notice(mdwc->dev, "%s initiate recovery from hc_died\n", __func__);
 	/* Recovery already under process */
 	if (mdwc->hc_died)
 		return 0;

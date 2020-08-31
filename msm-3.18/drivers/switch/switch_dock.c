@@ -268,11 +268,17 @@ static int __ref dock_switch_vbus_callback(struct notifier_block *nfb, unsigned 
     spin_lock_irqsave(&ds->outs_mask_lock, ds->lock_flags);
     ds->vbus_supplied = r;
     spin_unlock_irqrestore(&ds->outs_mask_lock, ds->lock_flags);
+    if (!ds->vbus_supplied && e_dock_type_smart == ds->dock_type) {
+        if (gpio_is_valid(ds->usb_switch_pin)) {
+            pr_notice("urgent switch usb to type-c connector %lld\n", ktime_to_ms(ktime_get()));
+            gpio_set_value(ds->usb_switch_pin, !ds->usb_switch_l);
+        }
+    }
 
 	return NOTIFY_OK;
 }
 
-static int wait_for_stable_signal(int pin, int interim)
+static int wait_for_stable_signal(int pin, int interim, volatile int *vbus)
 {
     long long timer;
     int pulses = 0, state = 0;
@@ -284,6 +290,10 @@ static int wait_for_stable_signal(int pin, int interim)
     if (gpio_is_valid(pin)) {
 //        pr_notice("start %d pulses %lld\n", gpio_get_value(pin), ktime_to_ms(ktime_get()));
         do {
+            if (vbus && 0 == *vbus) {
+                pulses = 0;
+                break;
+            }
             if (state != gpio_get_value(pin)) {
                 state ^= 1;
 //                pr_notice("detcted %d pulses %lld\n", pulses, ktime_to_ms(ktime_get()));
@@ -402,7 +412,7 @@ static void dock_switch_work_func(struct work_struct *work)
     if (e_dock_type_basic != ds->dock_type) {
         if (ds->sched_irq & SWITCH_DOCK) {
             //enable_and_sync_switch_irq(ds->ign_irq, 0);
-            val = wait_for_stable_signal(ds->ign_pin, DEBOUNCE_INTERIM + PATERN_INTERIM);
+            val = wait_for_stable_signal(ds->ign_pin, DEBOUNCE_INTERIM + PATERN_INTERIM, (e_dock_type_smart == ds->dock_type)?(volatile int *)&ds->vbus_supplied:0);
             if (ds->irq_ack) {
                 //val += ds->irq_ack;
                 //val = ds->irq_ack;
@@ -423,9 +433,11 @@ static void dock_switch_work_func(struct work_struct *work)
 					pr_notice("smart cradle unplagged %lld [dock_pin %d]\n", ktime_to_ms(ktime_get()), gpio_get_value(ds->dock_pin));
 					if (ds->usb_psy) {
 						//ds->usb_psy->set_property(ds->usb_psy, POWER_SUPPLY_PROP_BOOST_CURRENT, &prop);
-                        prop.intval = 4;
+                        prop.intval = 300;
                         do {
-                            msleep_interruptible(500);
+                            mutex_unlock(&ds->lock);
+                            msleep_interruptible(10);
+                            mutex_lock(&ds->lock);
                         } while (--prop.intval);
 
                         if (gpio_is_valid(ds->usb_switch_pin)) {
@@ -476,7 +488,9 @@ static void dock_switch_work_func(struct work_struct *work)
 					val = 0;
 					// pin function is basic dock detect
 					pr_notice("enable dock detect function %lld\n", ktime_to_ms(ktime_get()));
+                    mutex_unlock(&ds->lock);
 					set_aml_enable(ds, FORBID_EXT_SPKR);
+                    mutex_lock(&ds->lock);
 					//gpio_direction_input(ds->dock_pin);
 					// switch otg connector
 					if (gpio_is_valid(ds->usb_switch_pin)) {
@@ -528,13 +542,13 @@ static void dock_switch_work_func(struct work_struct *work)
 
                 // disable dock interrupts while smart cradle
                 if (ds->dock_irq) {
-                    enable_switch_irq(ds->dock_irq, 0);
-                    set_aml_enable(ds, 0);
                     pr_notice("disable dock irq[%d] %lld\n", ds->dock_irq, ktime_to_ms(ktime_get()));
                     ds->sched_irq &= ~SWITCH_IGN;
+                    enable_switch_irq(ds->dock_irq, 0);
+                    set_aml_enable(ds, 0);
                 }
             } else {
-                set_aml_enable(ds, FORBID_EXT_SPKR);
+                //set_aml_enable(ds, FORBID_EXT_SPKR);
             }
 
             // switch otg connector
@@ -652,7 +666,7 @@ static void dock_switch_work_func_fix(struct work_struct *work)
     // PATERN_INTERIM should be replaced by correct
     //
     mutex_lock(&ds->lock);
-    val = wait_for_stable_signal(ds->dock_pin, DEBOUNCE_INTERIM + PATERN_INTERIM);
+    val = wait_for_stable_signal(ds->dock_pin, DEBOUNCE_INTERIM + PATERN_INTERIM, 0);
     val = pulses2freq(val, PATERN_INTERIM);
     pr_notice("%d HZ %lld\n", val, ktime_to_ms(ktime_get()));
 
