@@ -692,22 +692,31 @@ void xhci_stop(struct usb_hcd *hcd)
 
 	mutex_lock(&xhci->mutex);
 
-	if (!(xhci->xhc_state & XHCI_STATE_HALTED)) {
-		spin_lock_irq(&xhci->lock);
-
-		xhci->xhc_state |= XHCI_STATE_HALTED;
-		xhci->cmd_ring_state = CMD_RING_STATE_STOPPED;
-		xhci_halt(xhci);
-		xhci_reset(xhci);
-
-		spin_unlock_irq(&xhci->lock);
+/*	if (!usb_hcd_is_primary_hcd(hcd)) {
+    	spin_lock_irq(&xhci->lock);
+        xhci_halt(hcd_to_xhci(xhci->shared_hcd));
+    	spin_unlock_irq(&xhci->lock);
+		mutex_unlock(&xhci->mutex);
+		return;
 	}
+*/
+    if (!(xhci->xhc_state & XHCI_STATE_HALTED)) {
+        spin_lock_irq(&xhci->lock);
 
+        xhci->xhc_state |= XHCI_STATE_HALTED;
+        xhci->cmd_ring_state = CMD_RING_STATE_STOPPED;
+        xhci_halt(xhci);
+        xhci_reset(xhci);
+
+        spin_unlock_irq(&xhci->lock);
+    }
+
+#if 1
 	if (!usb_hcd_is_primary_hcd(hcd)) {
 		mutex_unlock(&xhci->mutex);
 		return;
 	}
-
+#endif
 	xhci_cleanup_msix(xhci);
 
 	/* Deleting Compliance Mode Recovery Timer */
@@ -1481,7 +1490,7 @@ int xhci_urb_enqueue(struct usb_hcd *hcd, struct urb *urb, gfp_t mem_flags)
 exit:
 	return ret;
 dying:
-	xhci_dbg(xhci, "Ep 0x%x: URB %pK submitted for "
+	xhci_notice(xhci, "Ep 0x%x: URB %pK submitted for "
 			"non-responsive xHCI host.\n",
 			urb->ep->desc.bEndpointAddress, urb);
 	ret = -ESHUTDOWN;
@@ -3677,6 +3686,9 @@ void xhci_free_dev(struct usb_hcd *hcd, struct usb_device *udev)
 	}
 
 	spin_lock_irqsave(&xhci->lock, flags);
+
+	virt_dev->udev = NULL;
+
 	/* Don't disable the slot if the host controller is dead. */
 	state = readl(&xhci->op_regs->status);
 	if (state == 0xffffffff || (xhci->xhc_state & XHCI_STATE_DYING) ||

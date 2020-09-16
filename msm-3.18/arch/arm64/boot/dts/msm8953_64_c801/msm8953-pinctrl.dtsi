@@ -1787,7 +1787,7 @@ cradle connectivety
 
 				config {
 					pins = "gpio12", "gpio13", "gpio36", "gpio97";
-					drive-strength = <8>;
+					drive-strength = <16>;
 					bias-pull-down;
 				};
 			};

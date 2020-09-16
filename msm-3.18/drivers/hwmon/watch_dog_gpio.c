@@ -236,7 +236,7 @@ static void watchdog_toggle_work(struct work_struct *work)
         if (-1 == inf->suspend) {
             d = 0;
         } else {
-            d = !inf->portable;
+            d = 1; //!inf->portable;
         }
         gpio_set_value(inf->toggle_pin, (int)d);
         return;
@@ -479,9 +479,7 @@ static int watchdog_pin_prepare(struct device *dev)
     }
     spin_unlock_irqrestore(&wdi->rfkillpin_lock, wdi->lock_flags);
 
-    //if (gpio_is_valid(wdi->toggle_pin)) {
-        cancel_delayed_work(&wdi->toggle_work);
-    //}
+    cancel_delayed_work(&wdi->toggle_work);
 
     if(gpio_is_valid(wdi->rf_kill_pin)){
         pr_notice("shut down rf %lld\n", ktime_to_ms(ktime_get()));
@@ -490,7 +488,7 @@ static int watchdog_pin_prepare(struct device *dev)
 
     if (gpio_is_valid(wdi->toggle_pin)) {
         pr_notice("set toggle pin to inactive [%d] %lld\n", wdi->state, ktime_to_ms(ktime_get()));
-        d = !wdi->portable;
+        d = 1; //!wdi->portable;
         if (wdi->high_delay == wdi->low_delay) {
             //d = 1;
         }
@@ -502,7 +500,7 @@ static int watchdog_pin_prepare(struct device *dev)
         gpio_set_value(wdi->suspend_ind, wdi->suspend_ind_a);
     }
 
-    pr_notice("allow suspend %lld\n", ktime_to_ms(ktime_get()));
+    pr_notice("prepared %lld\n", ktime_to_ms(ktime_get()));
 
     return 0;
 }
@@ -511,7 +509,6 @@ static int watchdog_pin_suspend(struct device *dev)
 {
     struct watch_dog_pin_info *wdi = dev_get_drvdata(dev);
 
-    //cancel_delayed_work(&wdi->toggle_work);
     spin_lock_irqsave(&wdi->rfkillpin_lock, wdi->lock_flags);
     if (wdi->suspend != -1) {
         wdi->suspend = 1; 
@@ -527,14 +524,12 @@ static int watchdog_pin_resume(struct device *dev)
     struct watch_dog_pin_info *wdi = dev_get_drvdata(dev);
 
     if (gpio_is_valid(wdi->toggle_pin)) {
-        pr_notice("restart toggling [%d] %lld\n", wdi->state, ktime_to_ms(ktime_get()));
+        pr_notice("restore toggling [%d] %lld\n", wdi->state, ktime_to_ms(ktime_get()));
         spin_lock_irqsave(&wdi->rfkillpin_lock, wdi->lock_flags);
         if (wdi->suspend != -1) {
             wdi->suspend = 0; 
         }
         spin_unlock_irqrestore(&wdi->rfkillpin_lock, wdi->lock_flags);
-//        cancel_delayed_work(&wdi->toggle_work);
-        schedule_delayed_work(&wdi->toggle_work, 0);	
     }
 
 	if(gpio_is_valid(wdi->suspend_ind)){
@@ -548,6 +543,21 @@ static int watchdog_pin_resume(struct device *dev)
     }
 
 	return 0;
+}
+
+static void watchdog_pin_complete(struct device *dev)
+{
+    struct watch_dog_pin_info *wdi = dev_get_drvdata(dev);
+
+    if (wdi->suspend != -1) {
+        wdi->suspend = 0; 
+    }
+
+    pr_notice("complete and restart toggling %lld\n", ktime_to_ms(ktime_get()));
+
+    schedule_delayed_work(&wdi->toggle_work, 0);	
+
+    return;
 }
 
 static void watchdog_pin_shutdown(struct platform_device *dev)
@@ -576,6 +586,7 @@ static void watchdog_pin_shutdown(struct platform_device *dev)
 static const struct dev_pm_ops watchdog_pin_pm_ops =
 {
 	.prepare	= watchdog_pin_prepare,
+    .complete   = watchdog_pin_complete,
     .suspend	= watchdog_pin_suspend,
     .resume		= watchdog_pin_resume,
 };

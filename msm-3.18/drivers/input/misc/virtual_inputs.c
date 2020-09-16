@@ -215,12 +215,13 @@ static void vinputs_work_func(struct work_struct *work)
 			input_report_abs(vinp->input_dev, vinp->vmap[i].code, v);
 			vinp->vmap[i].val = v;
 			sync = 1;
-			pr_notice("%s sent input%i = %d\n", __func__, i, (unsigned int)v);
+			pr_notice("%s input%i = %d reported\n", __func__, i, (unsigned int)v);
 		}
 	}
 
 	if (sync) {
 		input_sync(vinp->input_dev);
+        pr_notice("%s input synced\n", __func__);
 	}
 }
 
