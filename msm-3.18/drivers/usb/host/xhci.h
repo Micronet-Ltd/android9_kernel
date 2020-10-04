@@ -1607,6 +1607,8 @@ static inline struct usb_hcd *xhci_to_hcd(struct xhci_hcd *xhci)
 
 #define xhci_dbg(xhci, fmt, args...) \
 	dev_dbg(xhci_to_hcd(xhci)->self.controller , fmt , ## args)
+#define xhci_notice(xhci, fmt, args...) \
+	dev_notice(xhci_to_hcd(xhci)->self.controller , fmt , ## args)
 #define xhci_err(xhci, fmt, args...) \
 	dev_err(xhci_to_hcd(xhci)->self.controller , fmt , ## args)
 #define xhci_warn(xhci, fmt, args...) \
