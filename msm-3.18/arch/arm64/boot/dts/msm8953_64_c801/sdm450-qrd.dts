@@ -61,10 +61,11 @@
 	dock {
 		compatible = "mcn,dock-switch";
 		pinctrl-names = "dock_pins_active", "dock_pin_suspend";
-		pinctrl-0 = <&dock_pins_active>;
-		pinctrl-1 = <&dock_pin_suspend>;
+		pinctrl-0 = <&dock_pins_active &dock_pins_mb_ind>;
+		pinctrl-1 = <&dock_pin_suspend &dock_pins_mb_ind>;
 		mcn,dock-pin = <&tlmm 13 GPIO_ACTIVE_LOW>;
 		mcn,ign-pin = <&tlmm 36 GPIO_ACTIVE_LOW>;
+		mcn,mb-ind-pin = <&tlmm 7 GPIO_ACTIVE_HIGH>;
 		/* usb switch hw controlled by vbus_cradle signal */
 		mcn,usb-switch-pin = <&tlmm 12 GPIO_ACTIVE_HIGH>;
 		/*mcn,otg-en-pin = <&tlmm 97 GPIO_ACTIVE_HIGH>;*/
@@ -83,7 +84,20 @@
 		mcn,board-id-2 = <&tlmm 96 GPIO_ACTIVE_LOW>;
 		status = "okay";
 	};
-
+	pwr_loss_mon {
+		compatible = "mcn,pwr-loss-mon-scap";
+		pinctrl-names = "pwr_loss_mon_active", "pwr_loss_mon_suspend";
+		pinctrl-0 = <&pwr_loss_mon_active>;
+		pinctrl-1 = <&pwr_loss_mon_suspend>;
+		mcn,pwr-loss-mon = <&tlmm 46 GPIO_ACTIVE_LOW>;
+		mcn,wan-off-delay = <0>;
+		mcn,wlan-off-delay = <0>;
+		mcn,plat-off-delay = <18000>;
+		interrupt-names = "pwr-loss";
+		interrupt-parent = <&tlmm>;
+		interrupts = <&tlmm 46 0>;
+		status = "okay";
+	};
 };
 
 &pm8953_rtc {

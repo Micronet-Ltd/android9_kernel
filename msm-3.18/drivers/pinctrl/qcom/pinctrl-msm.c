@@ -821,7 +821,11 @@ bool msm_gpio_irq_handler(unsigned int irq, struct irq_desc *desc)
 		if (val & BIT(g->intr_status_bit)) {
 			irq_pin = irq_find_mapping(gc->irqdomain, i);
 			handled += generic_handle_irq(irq_pin);
-		}
+            if (!handled) {
+                pr_notice("%s: not handled %s irq, pin %d [%d, %lu]\n", __func__, (desc->name)?desc->name:"unknown",
+                          irq_pin, desc->irq_data.irq, desc->irq_data.hwirq);
+            }
+        }
 	}
 
 	ret = (handled != 0);

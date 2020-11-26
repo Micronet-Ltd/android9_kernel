@@ -1589,7 +1589,7 @@ static void dwc3_restart_usb_work(struct work_struct *w)
 	mdwc->in_restart = true;
 
 	if (!mdwc->vbus_active) {
-		dev_dbg(mdwc->dev, "%s bailing out in disconnect\n", __func__);
+		dev_notice(mdwc->dev, "%s bailing out in disconnect\n", __func__);
 		dwc->err_evt_seen = false;
 		mdwc->in_restart = false;
 		return;
@@ -1635,7 +1635,7 @@ static int msm_dwc3_usbdev_notify(struct notifier_block *self,
 	if (action != USB_BUS_DIED)
 		return 0;
 
-	dev_dbg(mdwc->dev, "%s initiate recovery from hc_died\n", __func__);
+	dev_notice(mdwc->dev, "%s initiate recovery from hc_died\n", __func__);
 	/* Recovery already under process */
 	if (mdwc->hc_died)
 		return 0;
@@ -1681,8 +1681,10 @@ static int dwc3_msm_config_gdsc(struct dwc3_msm *mdwc, int on)
 			dev_err(mdwc->dev, "unable to enable usb3 gdsc\n");
 			return ret;
 		}
+        mdwc->vbus_reg_enabled = 1;
 	} else {
 		ret = regulator_disable(mdwc->dwc3_gdsc);
+        mdwc->vbus_reg_enabled = 0;
 		if (ret) {
 			dev_err(mdwc->dev, "unable to disable usb3 gdsc\n");
 			return ret;
@@ -2160,7 +2162,7 @@ static int dwc3_msm_suspend(struct dwc3_msm *mdwc)
 				    mdwc->otg_state == OTG_STATE_B_IDLE ||
 				    mdwc->in_restart)) {
 		mdwc->lpm_flags |= MDWC3_POWER_COLLAPSE;
-		dev_dbg(mdwc->dev, "%s: power collapse\n", __func__);
+		dev_notice(mdwc->dev, "%s: power collapse\n", __func__);
 		dwc3_msm_config_gdsc(mdwc, 0);
 		clk_disable_unprepare(mdwc->sleep_clk);
 	}
@@ -2540,8 +2542,18 @@ static int dwc3_msm_power_get_property_usb(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_HEALTH:
 		val->intval = mdwc->health_status;
 		break;
-	case POWER_SUPPLY_PROP_USB_OTG:
-		val->intval = !mdwc->id_state;
+    case POWER_SUPPLY_PROP_USB_OTG:
+        if (0x55AA == val->intval) {
+            struct dwc3 *dwc = platform_get_drvdata(mdwc->dwc3);
+
+            if (dwc)
+                val->intval = atomic_read(&dwc->in_lpm);
+            else
+                val->intval = 0;
+            dev_notice(mdwc->dev, "POWER_SUPPLY_PROP_USB_OTG (0x55aa: %s\n", (val->intval)?"in lpm":"still active");
+        } else {
+            val->intval = !mdwc->id_state; 
+        }
 		break;
 	default:
 		return -EINVAL;
@@ -2578,12 +2590,28 @@ static int dwc3_msm_power_set_property_usb(struct power_supply *psy,
                 dwc3_notify_event(dwc, DWC3_CONTROLLER_RESTART_USB_SESSION, 0); 
             }
         } else {
+            int resume = 0;
             // Vladimir
             // enhance cradle plug/unplug indication
             // enable host mode, Vbus shouldn't be supplied to cradle
             //
-            mdwc->cradle_state = (val->intval & 0x10) ? 1 : 0; 
             id = (val->intval & (~0x10)) ? DWC3_ID_GROUND : DWC3_ID_FLOAT;
+            if (!mdwc->cradle_state) {
+                mdwc->cradle_state = (val->intval & 0x10) ? 1 : 0; 
+                if (DWC3_PROPRIETARY_CHARGER == mdwc->chg_type) {
+                    if (OTG_STATE_B_PERIPHERAL == mdwc->otg_state) {
+                        mdwc->otg_state = OTG_STATE_B_IDLE;
+                        dwc3_otg_start_peripheral(mdwc, 0);
+                    }
+                }
+                dwc3_msm_gadget_vbus_draw(mdwc, 0);
+//                dwc3_notify_event(dwc, DWC3_CONTROLLER_RESTART_USB_SESSION, 0); 
+            } else {
+                if (mdwc->cradle_state) {
+                    resume = 1;
+                }
+                mdwc->cradle_state = (val->intval & 0x10) ? 1 : 0; 
+            }
             dev_notice(mdwc->dev, "POWER_SUPPLY_PROP_USB_OTG :%d-->%d\n", mdwc->id_state, id);
             if (mdwc->id_state == id)
                 break;
@@ -2600,6 +2628,11 @@ static int dwc3_msm_power_set_property_usb(struct power_supply *psy,
             if (dwc->is_drd) {
                 dbg_event(0xFF, "stayID", 0);
                 pm_stay_awake(mdwc->dev);
+                if (resume) {
+                    if (atomic_read(&dwc->in_lpm)) {
+                        mdwc->resume_pending = true;
+                    }
+                }
                 queue_delayed_work(mdwc->dwc3_resume_wq,
                         &mdwc->resume_work, 0);
             }
@@ -3445,8 +3478,10 @@ static int dwc3_msm_remove(struct platform_device *pdev)
 	if (mdwc->bus_perf_client)
 		msm_bus_scale_unregister_client(mdwc->bus_perf_client);
 
-	if (!IS_ERR_OR_NULL(mdwc->vbus_reg) && mdwc->vbus_reg_enabled)
+	if (!IS_ERR_OR_NULL(mdwc->vbus_reg) && mdwc->vbus_reg_enabled) {
 		regulator_disable(mdwc->vbus_reg);
+        mdwc->vbus_reg_enabled = 0;
+    }
 
 	disable_irq(mdwc->hs_phy_irq);
 	if (mdwc->ss_phy_irq)
@@ -3623,6 +3658,7 @@ static int dwc3_otg_start_host(struct dwc3_msm *mdwc, int on)
 		if (!IS_ERR(mdwc->vbus_reg)) {
             if (mdwc->cradle_state) {
                 ret = 0;
+                mdwc->vbus_reg_enabled = 0;
             } else {
                 ret = regulator_enable(mdwc->vbus_reg);
                 mdwc->vbus_reg_enabled = 1;
@@ -3713,6 +3749,7 @@ static int dwc3_otg_start_host(struct dwc3_msm *mdwc, int on)
             if (mdwc->vbus_reg_enabled) {
                 dev_notice(mdwc->dev, "disable Vbus\n");
                 ret = regulator_disable(mdwc->vbus_reg); 
+                mdwc->vbus_reg_enabled = 0;
             } else {
                 ret = 0;
             }
@@ -4087,7 +4124,13 @@ static void dwc3_msm_otg_sm_work(struct work_struct *w)
 			dbg_event(0xFF, "!id", 0);
 			mdwc->otg_state = OTG_STATE_A_IDLE;
 			work = 1;
-			mdwc->chg_type = DWC3_INVALID_CHARGER;
+            if (0 /*mdwc->cradle_state*/) {
+                mdwc->chg_type = DWC3_PROPRIETARY_CHARGER;
+                dwc3_msm_gadget_vbus_draw(mdwc, DWC3_HVDCP_CHG_MAX);
+                dev_notice(mdwc->dev, "enable draw from cradle\n");
+            } else {
+                mdwc->chg_type = DWC3_INVALID_CHARGER;
+            }
 		} else if (test_bit(B_SESS_VLD, &mdwc->inputs)) {
 			dbg_event(0xFF, "b_sess_vld", 0);
 			switch (mdwc->chg_type) {
@@ -4241,7 +4284,13 @@ static void dwc3_msm_otg_sm_work(struct work_struct *w)
 				dev_err(mdwc->dev, "unable to start host\n");
 				mdwc->otg_state = OTG_STATE_A_IDLE;
 				goto ret;
-			}
+			} else {
+                if (mdwc->cradle_state) {
+                    mdwc->chg_type = DWC3_PROPRIETARY_CHARGER;
+                    dwc3_msm_gadget_vbus_draw(mdwc, DWC3_HVDCP_CHG_MAX);
+                    dev_notice(mdwc->dev, "enable draw from cradle\n");
+                }
+            }
 			if (mdwc->no_wakeup_src_in_hostmode &&
 						mdwc->in_host_mode)
 				pm_wakeup_event(mdwc->dev,

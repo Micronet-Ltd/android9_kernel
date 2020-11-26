@@ -276,6 +276,9 @@ static int xhci_stop_device(struct xhci_hcd *xhci, int slot_id, int suspend)
 
 	ret = 0;
 	virt_dev = xhci->devs[slot_id];
+    if (!virt_dev)
+		return -ENODEV;
+
 	cmd = xhci_alloc_command(xhci, false, true, GFP_NOIO);
 	if (!cmd) {
 		xhci_dbg(xhci, "Couldn't allocate command structure.\n");
@@ -628,13 +631,17 @@ static u32 xhci_get_port_status(struct usb_hcd *hcd,
 					bus_state->resume_done[wIndex])) {
 			int time_left;
 
-			xhci_dbg(xhci, "Resume USB2 port %d\n",
+			xhci_notice(xhci, "Resume USB2 port %d\n",
 					wIndex + 1);
 			bus_state->resume_done[wIndex] = 0;
 			clear_bit(wIndex, &bus_state->resuming_ports);
 
 			set_bit(wIndex, &bus_state->rexit_ports);
-			xhci_set_link_state(xhci, port_array, wIndex,
+            xhci_test_and_clear_bit(xhci, port_array, wIndex,
+					PORT_PLC);
+ 			xhci_set_link_state(xhci, port_array, wIndex,
+ 					XDEV_U0);
+            xhci_set_link_state(xhci, port_array, wIndex,
 					XDEV_U0);
 
 			spin_unlock_irqrestore(&xhci->lock, flags);
@@ -928,14 +935,14 @@ int xhci_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue,
 			retval = -ENODEV;
 			break;
 		}
+        xhci_notice(xhci, "get port status, actual port %d status  = 0x%x\n",
+                wIndex, temp);
 		status = xhci_get_port_status(hcd, bus_state, port_array,
 				wIndex, temp, flags);
 		if (status == 0xffffffff)
 			goto error;
 
-		xhci_dbg(xhci, "get port status, actual port %d status  = 0x%x\n",
-				wIndex, temp);
-		xhci_dbg(xhci, "Get port status returned 0x%x\n", status);
+		xhci_notice(xhci, "Get port status returned 0x%x\n", status);
 
 		put_unaligned(cpu_to_le32(status), (__le32 *) buf);
 		break;

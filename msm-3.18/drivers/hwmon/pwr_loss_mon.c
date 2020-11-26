@@ -58,6 +58,7 @@ struct power_loss_monitor {
     struct device *hmd;
     struct pinctrl *pctl;
     struct power_supply *usb_psy;
+    struct power_supply *bms_psy;
     struct delayed_work pwr_lost_work;
     struct pwr_loss_mon_attr attr_state;
     struct pwr_loss_mon_attr attr_inl;
@@ -84,6 +85,8 @@ struct power_loss_monitor {
     spinlock_t pwr_lost_lock;
     unsigned long lock_flags;
     long long pwr_lost_timer;
+    int batt_is_scap;
+    int portable;
 };
 
 extern int cradle_register_notifier(struct notifier_block *nb);
@@ -211,7 +214,47 @@ static void __ref pwr_loss_mon_work(struct work_struct *work)
     } else {
         usb_online = 0;
     }
+
     spin_unlock_irqrestore(&pwrl->pwr_lost_lock, pwrl->lock_flags);
+
+    if (pwrl->portable) {
+        if (!pwrl->bms_psy) {
+            pr_notice("bms power supply not ready %lld\n", ktime_to_ms(ktime_get()));
+            pwrl->bms_psy = power_supply_get_by_name("bms");
+        }
+
+        if (!pwrl->bms_psy) {
+            schedule_delayed_work(&pwrl->pwr_lost_work, msecs_to_jiffies(100));
+            return;
+        } else if (-1 == pwrl->batt_is_scap) {
+            union power_supply_propval prop = {0,};
+
+            err = pwrl->bms_psy->get_property(pwrl->bms_psy, POWER_SUPPLY_PROP_BATTERY_TYPE, &prop);
+            if (err) {
+                pr_notice("failure to get battery type %lld\n", ktime_to_ms(ktime_get()));
+                enable_irq_safe(pwrl->pwr_lost_irq, 0);
+                return;
+            }
+            pr_notice("battery type is %s %lld\n", prop.strval, ktime_to_ms(ktime_get()));
+            err = strncmp(prop.strval, "Unknown Battery", strlen("Unknown Battery"));
+            if (0 != err) {
+                err = strncmp(prop.strval, "Disconnected Battery", strlen("Disconnected Battery"));
+            }
+            if (0 != err) {
+                err = strncmp(prop.strval, "Loading Battery Data", strlen("Loading Battery Data"));
+            }
+            if (0 == err) {
+                schedule_delayed_work(&pwrl->pwr_lost_work, msecs_to_jiffies(100));
+                return;
+            }
+            err = strncmp(prop.strval, "c801_scap_4v2_135mah_30k", strlen("c801_scap_4v2_135mah_30k"));
+            /*pwrl->cradle_attached = */pwrl->batt_is_scap = (0 == err);
+        }
+        if (0 == pwrl->batt_is_scap) {
+            enable_irq_safe(pwrl->pwr_lost_irq, 0);
+            return;
+        }
+    }
 
     if (pwrl->pwr_lost_timer <= 0) {
         spin_lock_irqsave(&pwrl->pwr_lost_lock, pwrl->lock_flags);
@@ -290,10 +333,18 @@ static void __ref pwr_loss_mon_work(struct work_struct *work)
         pr_notice("urgent remount block devices ro %lld\n", ktime_to_ms(ktime_get()));
 
         sys_sync();
-        remount_ro(pwrl);
+        if (1) {
+            remount_ro(pwrl); 
+        }
         pr_notice("urgent shutdown device %lld\n", ktime_to_ms(ktime_get()));
-        orderly_poweroff(1);
-        return;
+        if (1) {
+            orderly_poweroff(1);
+            return;
+        }
+        // temporrary for enhance cam bringup
+        if (0) {
+            timer = 300000; 
+        }
     } else if (pwrl->pwr_lost_wlan_d < ktime_to_ms(ktime_get())) {
         pr_notice("wlan shutdown %lld\n", ktime_to_ms(ktime_get()));
         wcnss_suspend(pwrl, 1);
@@ -429,6 +480,7 @@ static ssize_t pwr_loss_mon_in_show(struct device *dev, struct device_attribute 
 {
 	int val = -1, usb_online;
     struct power_loss_monitor *pwrl = dev_get_drvdata(dev);
+    union power_supply_propval prop = {0,};
 
     if (!pwrl->usb_psy) {
         pr_notice("usb power supply not ready %lld\n", ktime_to_ms(ktime_get()));
@@ -443,7 +495,12 @@ static ssize_t pwr_loss_mon_in_show(struct device *dev, struct device_attribute 
         val = gpio_get_value(pwrl->pwr_lost_pin);
     }
 
-	return sprintf(buf, "Vbus is %s, Input power is %s\n", (usb_online)?"online":"offline", (val)?"plugged":"unplugged");
+    if (0 != pwrl->bms_psy->get_property(pwrl->bms_psy, POWER_SUPPLY_PROP_BATTERY_TYPE, &prop) || !prop.strval) {
+        prop.strval = "unknown";
+    }
+
+	return sprintf(buf, "Vbus is %s, Input power is %s, Config [%d, %d %s]\n", (usb_online)?"online":"offline", (val)?"plugged":"unplugged",
+                   pwrl->portable, pwrl->batt_is_scap, prop.strval);
 }
 
 static ssize_t pwr_loss_mon_in_l_show(struct device *dev, struct device_attribute *attr, char *buf)
@@ -545,6 +602,7 @@ static int pwr_loss_mon_probe(struct platform_device *pdev)
     struct device *dev = &pdev->dev;
     struct device_node *np;
     struct pinctrl_state *pctls;
+    const char *c;
 
     np = dev->of_node; //of_find_compatible_node(0, 0, "a8-hm-power-lost");
     if (!np) {
@@ -559,6 +617,18 @@ static int pwr_loss_mon_probe(struct platform_device *pdev)
     }
 
     pwrl->sys_ready = 0;
+
+    pwrl->batt_is_scap = -1;
+    c = of_get_property(np, "compatible", 0);
+    if (c) {
+        pr_err("node is finded\n");
+    }
+
+    if (c && 0 == strncmp("mcn,pwr-loss-mon-scap", c, sizeof("mcn,pwr-loss-mon-scap") - sizeof(char))) {
+        pwrl->portable = 1;
+    } else {
+        pwrl->portable = 0;
+    }
 
     spin_lock_init(&pwrl->pwr_lost_lock);
     wake_lock_init(&pwrl->wlock, WAKE_LOCK_SUSPEND, "pwr_loss_suspend_lock");
@@ -872,6 +942,7 @@ static void pwr_loss_mon_shutdown(struct platform_device *pdev) {
 
 static const struct of_device_id of_pwr_loss_mon_match[] = {
 	{ .compatible = "mcn,pwr-loss-mon", },
+    { .compatible = "mcn,pwr-loss-mon-scap", },
 	{},
 };
 MODULE_DEVICE_TABLE(of, of_pwr_loss_mon_match);

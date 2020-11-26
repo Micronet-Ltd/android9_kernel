@@ -834,6 +834,7 @@ void xhci_stop_endpoint_command_watchdog(unsigned long arg)
 		xhci_dbg_trace(xhci, trace_xhci_dbg_cancel_urb,
 				"Stop EP timer ran, but another timer marked "
 				"xHCI as DYING, exiting.");
+        xhci_notice(xhci, "Stop EP timer ran, ut another timer marked xHCI as DYIN,\n");
 		spin_unlock_irqrestore(&xhci->lock, flags);
 		return;
 	}
@@ -841,12 +842,13 @@ void xhci_stop_endpoint_command_watchdog(unsigned long arg)
 		xhci_dbg_trace(xhci, trace_xhci_dbg_cancel_urb,
 				"Stop EP timer ran, but no command pending, "
 				"exiting.");
+        xhci_notice(xhci, "Stop EP timer ran, but no command pending,\n");
 		spin_unlock_irqrestore(&xhci->lock, flags);
 		return;
 	}
 
-	xhci_warn(xhci, "xHCI host not responding to stop endpoint command.\n");
-	xhci_warn(xhci, "Assuming host is dying, halting host.\n");
+	xhci_notice(xhci, "xHCI host not responding to stop endpoint command.\n");
+	xhci_notice(xhci, "Assuming host is dying, halting host.\n");
 	/* Oops, HC is dead or dying or at least not responding to the stop
 	 * endpoint command.
 	 */
@@ -866,8 +868,8 @@ void xhci_stop_endpoint_command_watchdog(unsigned long arg)
 		 * disconnect() methods will wait for all URBs to be unlinked,
 		 * so we must complete them.
 		 */
-		xhci_warn(xhci, "Non-responsive xHCI host is not halting.\n");
-		xhci_warn(xhci, "Completing active URBs anyway.\n");
+		xhci_notice(xhci, "Non-responsive xHCI host is not halting.\n");
+		xhci_notice(xhci, "Completing active URBs anyway.\n");
 		/* We could turn all TDs on the rings to no-ops.  This won't
 		 * help if the host has cached part of the ring, and is slow if
 		 * we want to preserve the cycle bit.  Skip it and hope the host
@@ -1208,7 +1210,7 @@ static void xhci_handle_stopped_cmd_ring(struct xhci_hcd *xhci,
 
 		i_cmd->status = COMP_CMD_STOP;
 
-		xhci_dbg(xhci, "Turn aborted command %pK to no-op\n",
+		xhci_notice(xhci, "Turn aborted command %pK to no-op\n",
 			 i_cmd->command_trb);
 		/* get cycle state from the original cmd trb */
 		cycle_state = le32_to_cpu(
@@ -1273,7 +1275,7 @@ void xhci_handle_command_timeout(unsigned long data)
 		return;
 	}
 	/* command timeout on stopped ring, ring can't be aborted */
-	xhci_dbg(xhci, "Command timeout on stopped ring\n");
+	xhci_notice(xhci, "Command timeout on stopped ring\n");
 	xhci_handle_stopped_cmd_ring(xhci, xhci->current_cmd);
 	spin_unlock_irqrestore(&xhci->lock, flags);
 	return;
@@ -1409,7 +1411,7 @@ static void handle_vendor_event(struct xhci_hcd *xhci,
 	u32 trb_type;
 
 	trb_type = TRB_FIELD_TO_TYPE(le32_to_cpu(event->generic.field[3]));
-	xhci_dbg(xhci, "Vendor specific event TRB type = %u\n", trb_type);
+	xhci_notice(xhci, "Vendor specific event TRB type = %u\n", trb_type);
 	if (trb_type == TRB_NEC_CMD_COMP && (xhci->quirks & XHCI_NEC_HOST))
 		handle_cmd_completion(xhci, &event->event_cmd);
 }
@@ -2613,7 +2615,7 @@ static int xhci_handle_event(struct xhci_hcd *xhci)
 	 * to make sure a watchdog timer didn't mark the host as non-responsive.
 	 */
 	if (xhci->xhc_state & XHCI_STATE_DYING) {
-		xhci_dbg(xhci, "xHCI host dying, returning from "
+		xhci_notice(xhci, "xHCI host dying, returning from "
 				"event handler.\n");
 		return 0;
 	}
@@ -2683,7 +2685,7 @@ hw_died:
 
 	if (xhci->xhc_state & XHCI_STATE_DYING ||
 	    xhci->xhc_state & XHCI_STATE_HALTED) {
-		xhci_dbg(xhci, "xHCI dying, ignoring interrupt. "
+		xhci_notice(xhci, "xHCI dying, ignoring interrupt. "
 				"Shouldn't IRQs be disabled?\n");
 		/* Clear the event handler busy flag (RW1C);
 		 * the event ring should be empty.

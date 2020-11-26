@@ -8,6 +8,7 @@
  *
  */
 
+#define pr_fmt(fmt) "%s: " fmt, __func__
 #include <linux/kernel.h>
 #include <linux/errno.h>
 #include <linux/module.h>
@@ -560,6 +561,7 @@ static int hub_port_status(struct usb_hub *hub, int port1,
 
 	mutex_lock(&hub->status_mutex);
 	ret = get_port_status(hub->hdev, port1, &hub->status->port);
+	dev_notice(hub->intfdev, "%s: [%d, %d, %d]\n", __func__, ret, le16_to_cpu(hub->status->port.wPortStatus), le16_to_cpu(hub->status->port.wPortChange));
 	if (ret < 4) {
 		if (ret != -ENODEV)
 			dev_err(hub->intfdev,
@@ -2683,7 +2685,7 @@ static int hub_port_wait_reset(struct usb_hub *hub, int port1,
 		if (delay_time >= 2 * HUB_SHORT_RESET_TIME)
 			delay = HUB_LONG_RESET_TIME;
 
-		dev_dbg(&hub->ports[port1 - 1]->dev,
+		dev_notice(&hub->ports[port1 - 1]->dev,
 				"not %sreset yet, waiting %dms\n",
 				warm ? "warm " : "", delay);
 	}
@@ -2807,13 +2809,13 @@ static int hub_port_reset(struct usb_hub *hub, int port1,
 			 * hot or warm reset failed.  Try another warm reset.
 			 */
 			if (!warm) {
-				dev_dbg(&port_dev->dev,
+				dev_notice(&port_dev->dev,
 						"hot reset failed, warm reset\n");
 				warm = true;
 			}
 		}
 
-		dev_dbg(&port_dev->dev,
+		dev_notice(&port_dev->dev,
 				"not enabled, trying %sreset again...\n",
 				warm ? "warm " : "");
 		delay = HUB_LONG_RESET_TIME;
@@ -3631,7 +3633,7 @@ static int hub_reset_resume(struct usb_interface *intf)
  */
 void usb_root_hub_lost_power(struct usb_device *rhdev)
 {
-	dev_warn(&rhdev->dev, "root hub lost power or was reset\n");
+	dev_notice(&rhdev->dev, "root hub lost power or was reset\n");
 	rhdev->reset_resume = 1;
 }
 EXPORT_SYMBOL_GPL(usb_root_hub_lost_power);
@@ -4121,6 +4123,7 @@ int hub_port_debounce(struct usb_hub *hub, int port1, bool must_be_connected)
 		if (ret < 0)
 			return ret;
 
+		dev_notice(&port_dev->dev, "port status [%d, %d, %d]\n", connection, portchange, portstatus);
 		if (!(portchange & USB_PORT_STAT_C_CONNECTION) &&
 		     (portstatus & USB_PORT_STAT_CONNECTION) == connection) {
 			if (!must_be_connected ||
@@ -4143,7 +4146,7 @@ int hub_port_debounce(struct usb_hub *hub, int port1, bool must_be_connected)
 		msleep(HUB_DEBOUNCE_STEP);
 	}
 
-	dev_dbg(&port_dev->dev, "debounce total %dms stable %dms status 0x%x\n",
+	dev_notice(&port_dev->dev, "debounce total %dms stable %dms status 0x%x\n",
 			total_time, stable_time, portstatus);
 
 	if (stable_time < HUB_DEBOUNCE_STABLE)
@@ -4411,7 +4414,7 @@ hub_port_init (struct usb_hub *hub, struct usb_device *udev, int port1,
 			if (retval < 0)		/* error or disconnect */
 				goto fail;
 			if (oldspeed != udev->speed) {
-				dev_dbg(&udev->dev,
+				dev_notice(&udev->dev,
 					"device reset changed speed!\n");
 				retval = -ENODEV;
 				goto fail;
@@ -4660,6 +4663,7 @@ static void hub_port_connect(struct usb_hub *hub, int port1, u16 portstatus,
 			portstatus &= ~USB_PORT_STAT_CONNECTION;
 			unreliable_port = port1;
 		} else {
+            dev_notice(&port_dev->dev, "debounce pass %d\n", portstatus);
 			portstatus = status;
 		}
 	}
@@ -4715,6 +4719,7 @@ static void hub_port_connect(struct usb_hub *hub, int port1, u16 portstatus,
 		}
 
 		/* reset (non-USB 3.0 devices) and get descriptor */
+        dev_notice(&port_dev->dev, "reset non USB3 devices\n");
 		usb_lock_port(port_dev);
 		status = hub_port_init(hub, udev, port1, i);
 		usb_unlock_port(port_dev);
@@ -4849,7 +4854,7 @@ static void hub_port_connect_change(struct usb_hub *hub, int port1,
 	struct usb_device *udev = port_dev->child;
 	int status = -ENODEV;
 
-	dev_dbg(&port_dev->dev, "status %04x, change %04x, %s\n", portstatus,
+	dev_notice(&port_dev->dev, "status %04x, change %04x, %s\n", portstatus,
 			portchange, portspeed(hub, portstatus));
 
 	if (hub->has_indicators) {
@@ -4979,7 +4984,7 @@ static void port_event(struct usb_hub *hub, int port1)
 	 * SS.Inactive state.
 	 */
 	if (hub_port_warm_reset_required(hub, port1, portstatus)) {
-		dev_dbg(&port_dev->dev, "do warm reset\n");
+		dev_notice(&port_dev->dev, "do warm reset\n");
 		if (!udev || !(portstatus & USB_PORT_STAT_CONNECTION)
 				|| udev->state == USB_STATE_NOTATTACHED) {
 			if (hub_port_reset(hub, port1, NULL,
@@ -5377,6 +5382,7 @@ static int usb_reset_and_verify_device(struct usb_device *udev)
 
 		/* ep0 maxpacket size may change; let the HCD know about it.
 		 * Other endpoints will be handled by re-enumeration. */
+        dev_notice(&udev->dev, "reinit ep0 and reset port %d\n.", port1);
 		usb_ep0_reinit(udev);
 		ret = hub_port_init(parent_hub, udev, port1, i);
 		if (ret >= 0 || ret == -ENOTCONN || ret == -ENODEV)
